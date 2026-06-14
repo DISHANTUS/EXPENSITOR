@@ -1,0 +1,20 @@
+# --- Web framework ---
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.34,<0.35
+
+# --- Database / ORM / migrations ---
+sqlalchemy[asyncio]>=2.0.36,<2.1
+asyncpg>=0.30,<0.31
+alembic>=1.14,<1.15
+
+# --- Config / validation ---
+pydantic>=2.10,<3
+pydantic-settings>=2.7,<3
+email-validator>=2.2,<3
+
+# --- Security (used from the auth phase onward) ---
+passlib[argon2]>=1.7.4,<2
+python-jose[cryptography]>=3.3,<4
+
+# --- HTTP client (exchange-rate provider) ---
+httpx>=0.28,<0.29

@@ -1,0 +1,1 @@
+"""Expensitor backend application package."""
