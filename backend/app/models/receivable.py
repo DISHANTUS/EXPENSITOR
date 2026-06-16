@@ -8,7 +8,7 @@ expand monthly like income sources and are never overdue in C2.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -21,6 +21,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     text,
 )
 from sqlalchemy import Enum as SAEnum
@@ -69,10 +70,11 @@ class Receivable(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reliability: Mapped[Decimal] = mapped_column(
         Numeric(4, 3), default=Decimal("0.5"), server_default=text("0.5"), nullable=False
     )
-    # Income Timing Intelligence: rough arrival window (NULL = unknown, never assumed).
+    # Income Timing Intelligence: rough arrival window + optional exact time (NULL = unknown).
     expected_time_window: Mapped[ExpectedTimeWindow | None] = mapped_column(
         SAEnum(ExpectedTimeWindow, name="expected_time_window", native_enum=False, create_constraint=False, length=20)
     )
+    expected_time: Mapped[time | None] = mapped_column(Time)
     notes: Mapped[str | None] = mapped_column(Text)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

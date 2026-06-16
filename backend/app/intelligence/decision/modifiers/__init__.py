@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-from app.intelligence.decision.modifiers import commitment, planning, spend  # noqa: F401
+from app.intelligence.decision.modifiers import commitment, lifestyle, planning, spend  # noqa: F401

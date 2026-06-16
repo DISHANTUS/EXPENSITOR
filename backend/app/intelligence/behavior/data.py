@@ -18,22 +18,24 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.intelligence.projection.calendar_utils import iter_year_months
 from app.models import (
     BudgetSession,
     Category,
+    CompanionEvent,
     Expense,
     Income,
     IncomeSource,
     PlannedExpense,
     Receivable,
+    SavingsGoal,
     SessionExpense,
     UserSettings,
 )
-from app.models.enums import BudgetSessionStatus, IncomeKind, IncomeSourceType
+from app.models.enums import BudgetSessionStatus, IncomeKind, IncomeSourceType, SavingsGoalStatus
 
 RATE_WINDOW_DAYS = 90
 MONTHLY_BUCKETS = 6  # current + 5 prior
@@ -93,6 +95,25 @@ class PlannedRow:
     status: str
     occasion_type: str | None
     is_recurring: bool
+
+
+@dataclass(frozen=True)
+class GoalRow:
+    kind: str                       # monthly_target | custom_goal
+    name: str
+    target_amount: Decimal          # monthly target, or total for a custom goal
+    target_date: date | None
+    start_date: date
+    status: str
+
+
+@dataclass(frozen=True)
+class DecisionEventRow:
+    """A logged buy-decision (B1.5c offer-exposure proxy) — read-only."""
+
+    on: date
+    offer_involved: bool
+    offer_classes: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -156,6 +177,11 @@ class BehaviorData:
     categories: dict[uuid.UUID, CategoryInfo] = field(default_factory=dict)
     salary_days: frozenset[int] = frozenset()
     shopping_category_ids: frozenset[uuid.UUID] = frozenset()
+    goals: tuple[GoalRow, ...] = ()      # B1.5b: active savings goals (for goal interference / sacrifice)
+    # B1.5c additions
+    long_monthly: dict[YearMonth, Decimal] = field(default_factory=dict)  # 13-mo total spend per month (seasonality)
+    long_months: tuple[YearMonth, ...] = ()
+    decision_events: tuple[DecisionEventRow, ...] = ()  # logged buy decisions (offer-exposure proxy)
 
     @property
     def today(self) -> date:
@@ -368,6 +394,64 @@ async def load_behavior_data(db: AsyncSession, user_id: uuid.UUID, today: date) 
         for pd, amt, st, occ, rec in pl_rows
     )
 
+    # 8. active savings goals (B1.5b — goal interference / sacrifice)
+    goal_rows = (
+        await db.execute(
+            select(
+                SavingsGoal.kind, SavingsGoal.name, SavingsGoal.converted_amount,
+                SavingsGoal.target_date, SavingsGoal.start_date, SavingsGoal.status,
+            ).where(
+                SavingsGoal.user_id == user_id,
+                SavingsGoal.deleted_at.is_(None),
+                SavingsGoal.status == SavingsGoalStatus.active,
+            )
+        )
+    ).all()
+    goals = tuple(
+        GoalRow(
+            kind=str(k.value if hasattr(k, "value") else k), name=name, target_amount=amt,
+            target_date=tdate, start_date=sdate, status=str(st.value if hasattr(st, "value") else st),
+        )
+        for k, name, amt, tdate, sdate, st in goal_rows
+    )
+
+    # 9. 13-month aggregate (seasonality / long trends) — server-side SUM, not raw rows
+    li = today.month - 1 - 12
+    long_start = date(today.year + (li // 12), li % 12 + 1, 1)
+    long_rows = (
+        await db.execute(
+            select(
+                extract("year", Expense.expense_date),
+                extract("month", Expense.expense_date),
+                func.coalesce(func.sum(Expense.converted_amount), 0),
+            ).where(
+                Expense.user_id == user_id,
+                Expense.deleted_at.is_(None),
+                Expense.expense_date >= long_start,
+                Expense.expense_date <= today,
+            ).group_by(extract("year", Expense.expense_date), extract("month", Expense.expense_date))
+        )
+    ).all()
+    long_monthly = {(int(y), int(m)): Decimal(str(t)) for y, m, t in long_rows}
+    long_months = tuple(iter_year_months(long_start, today))
+
+    # 10. logged buy decisions (B1.5c offer-exposure proxy)
+    ce_rows = (
+        await db.execute(
+            select(CompanionEvent.payload, CompanionEvent.created_at)
+            .where(CompanionEvent.user_id == user_id, CompanionEvent.action == "buy_decision")
+            .order_by(CompanionEvent.created_at.desc()).limit(200)
+        )
+    ).all()
+    decision_events = tuple(
+        DecisionEventRow(
+            on=created.date() if created else today,
+            offer_involved=bool((payload or {}).get("offer_involved")),
+            offer_classes=tuple((payload or {}).get("offer_classes", [])),
+        )
+        for payload, created in ce_rows
+    )
+
     return BehaviorData(
         window=window,
         base_currency=settings.base_currency,
@@ -383,4 +467,8 @@ async def load_behavior_data(db: AsyncSession, user_id: uuid.UUID, today: date) 
         categories=categories,
         salary_days=frozenset(salary_days),
         shopping_category_ids=shopping_ids,
+        goals=goals,
+        long_monthly=long_monthly,
+        long_months=long_months,
+        decision_events=decision_events,
     )

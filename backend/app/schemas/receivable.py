@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated
 
@@ -29,6 +29,7 @@ class ReceivableCreate(BaseModel):
     expected_date: date | None = None
     recurrence_day: int | None = Field(default=None, ge=1, le=31)
     expected_time_window: ExpectedTimeWindow | None = None
+    expected_time: time | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -62,6 +63,7 @@ class ReceivableUpdate(BaseModel):
     expected_date: date | None = None
     recurrence_day: int | None = Field(default=None, ge=1, le=31)
     expected_time_window: ExpectedTimeWindow | None = None
+    expected_time: time | None = None
     status: ReceivableStatus | None = None
 
     @field_validator("original_currency")
@@ -95,6 +97,7 @@ class ReceivableRead(BaseModel):
     next_expected_date: date | None     # computed, recurring only
     reliability: Decimal
     expected_time_window: ExpectedTimeWindow | None
+    expected_time: time | None
     notes: str | None
     received_at: datetime | None
     last_follow_up_at: datetime | None

@@ -15,8 +15,10 @@ from app.core.database import engine
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Dispose the database engine cleanly on shutdown."""
+    """Dispose the database engine + optional Ollama client cleanly on shutdown."""
     yield
+    from app.services import ollama_service
+    await ollama_service.aclose()
     await engine.dispose()
 
 

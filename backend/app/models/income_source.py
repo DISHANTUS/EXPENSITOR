@@ -7,7 +7,7 @@ weight used by the conservative (worst/expected/best) projection.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -21,6 +21,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Time,
     text,
 )
 from sqlalchemy import Enum as SAEnum
@@ -81,10 +82,11 @@ class IncomeSource(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reliability: Mapped[Decimal] = mapped_column(
         Numeric(4, 3), default=Decimal("0.5"), server_default=text("0.5"), nullable=False
     )
-    # Income Timing Intelligence: rough arrival window (NULL = unknown, never assumed).
+    # Income Timing Intelligence: rough arrival window + optional exact time (NULL = unknown).
     expected_time_window: Mapped[ExpectedTimeWindow | None] = mapped_column(
         SAEnum(ExpectedTimeWindow, name="expected_time_window", native_enum=False, create_constraint=False, length=20)
     )
+    expected_time: Mapped[time | None] = mapped_column(Time)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )

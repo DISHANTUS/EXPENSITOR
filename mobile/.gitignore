@@ -1,0 +1,8 @@
+﻿.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.idea/
+.vscode/
+# platform folders (android/, web/) ARE tracked.

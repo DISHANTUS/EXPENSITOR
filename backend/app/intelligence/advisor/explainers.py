@@ -217,6 +217,37 @@ def explain_behavioral_insight(insight) -> AdvisorExplanation:
     )
 
 
+_URGENCY_SEVERITY = {"low": "info", "medium": "warning", "high": "alert"}
+
+
+def explain_recommendation(rec) -> AdvisorExplanation:
+    """5-part advisor commentary (duck-typed Recommendation): what it is / why it
+    matters / biggest benefit / what changes / what stays the same. Option, not command."""
+    changes = f"Changes: {rec.life_impact.daily_change}. Unchanged: {rec.life_impact.unchanged}."
+    return AdvisorExplanation(
+        headline=rec.title, impact=f"Why it matters: {rec.reasoning}",
+        reason=f"Biggest benefit: {rec.expected_benefit}", key_number=changes,
+        best_next_action=AdvisorAction(rec.lever_key, PRIMARY, rec.action, {}),
+        risk=(rec.consequences_if_ignored if rec.urgency == "high" else None),
+        severity=_URGENCY_SEVERITY.get(rec.urgency, "info"),
+        facts={"category": rec.category, "outcome_preview": rec.outcome_preview.as_dict(),
+               "life_impact": rec.life_impact.as_dict()},
+    )
+
+
+def explain_bundle(bundle) -> AdvisorExplanation:
+    """Concise commentary for a recommendation Bundle (duck-typed)."""
+    steps = tuple(AdvisorAction(r.lever_key, SECONDARY, r.action, {}) for r in bundle.recommendations)
+    return AdvisorExplanation(
+        headline=bundle.title, impact=bundle.outcome_preview,
+        reason=f"Combined benefit: {bundle.combined_benefit}.",
+        key_number=f"Effort: {bundle.combined_effort}; risk: {bundle.combined_risk}.",
+        best_next_action=None, alternative_actions=steps, severity="info",
+        facts={"combined_benefit": bundle.combined_benefit, "combined_effort": bundle.combined_effort,
+               "combined_risk": bundle.combined_risk},
+    )
+
+
 def explain_modifier(finding) -> AdvisorExplanation:
     """Map a ModifierFinding (duck-typed) to the uniform advisor explanation shape."""
     action = AdvisorAction(finding.analyzer, PRIMARY, finding.recommendation, {}) if finding.recommendation else None

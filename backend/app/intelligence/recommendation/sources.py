@@ -129,27 +129,31 @@ def from_savings(ctx: RecommendationContext) -> list[Recommendation]:
         # lever: use existing savings
         if ctx.available_savings > 0:
             contrib = min(ctx.available_savings, gap)
+            amt = ph.money(contrib, ctx.currency)
             out.append(_goal_rec("use_savings", goal, ctx,
                                  title=f"You're {gap_txt} behind your {goal.name} goal.",
-                                 action=f"Using {ph.money(contrib, ctx.currency)} from existing savings would close most of the gap, if that suits you.",
+                                 action=f"Using {amt} from existing savings would close most of the gap, if that suits you.",
                                  contribution=contrib, effort="low",
                                  daily="no change to daily spending", unchanged="your daily budget and plans"))
         # lever: wait for upcoming income
         if ctx.next_income:
             inc_amt = Decimal(str(ctx.next_income["amount"]))
+            amt = ph.money(inc_amt, ctx.currency)
             out.append(_goal_rec("wait_for_income", goal, ctx,
                                  title=f"Income is expected on {ctx.next_income['date']}.",
-                                 action=f"Waiting for the {ph.money(inc_amt, ctx.currency)} would fund the {goal.name} goal without cuts.",
+                                 action=f"Waiting for the {amt} would fund the {goal.name} goal without cuts.",
                                  contribution=min(inc_amt, gap), effort="low",
                                  daily="no change — just a short wait", unchanged="your spending and other plans"))
         # lever: reduce a category
         if top_cut:
             saving, _ = _cut_benefit(top_cut.get("monthly_avg", "0"), ctx.currency)
-            out.append(_goal_rec(f"reduce_{_slug(top_cut['category'])}", goal, ctx,
-                                 title=f"Reducing {top_cut['category']} could help your {goal.name} goal.",
-                                 action=f"Trimming {top_cut['category']} would add about {ph.money(saving, ctx.currency)}/month, if saving more matters to you.",
+            cat = top_cut["category"]
+            amt = ph.money(saving, ctx.currency)
+            out.append(_goal_rec(f"reduce_{_slug(cat)}", goal, ctx,
+                                 title=f"Reducing {cat} could help your {goal.name} goal.",
+                                 action=f"Trimming {cat} would add about {amt}/month, if saving more matters to you.",
                                  contribution=saving, effort="medium",
-                                 daily=f"fewer {top_cut['category']} purchases", unchanged="your events and savings reserve"))
+                                 daily=f"fewer {cat} purchases", unchanged="your events and savings reserve"))
     return out
 
 
@@ -191,14 +195,14 @@ def from_advisor_and_load(ctx: RecommendationContext) -> list[Recommendation]:
                         life_impact=life, outcome=outcome, evidence={"source": "advisor_view", **c}))
     load = ctx.recurring_load
     if load and float(load.get("load_ratio", 0)) >= 0.30:
-        monthly = load.get("recurring_monthly", "0")
+        monthly_txt = ph.money(Decimal(str(load.get("recurring_monthly", "0"))), ctx.currency)
         life = LifeImpact(improves="monthly flexibility", daily_change="review subscriptions/commitments",
                           unchanged="anything you actively use")
-        outcome = OutcomePreview(goal_progress_change="none", savings_change=f"up to {ph.money(Decimal(str(monthly)), ctx.currency)}/month if trimmed",
+        outcome = OutcomePreview(goal_progress_change="none", savings_change=f"up to {monthly_txt}/month if trimmed",
                                  dependency_change="none", risk_change="improves", daily_life_change="cancel unused commitments",
                                  projected_result="lower fixed monthly load")
         out.append(_rec(COMMITMENT_MANAGEMENT, "manage_commitments",
-                        title=f"Recurring commitments are about {ph.money(Decimal(str(monthly)), ctx.currency)}/month.", impact=0.55,
+                        title=f"Recurring commitments are about {monthly_txt}/month.", impact=0.55,
                         action="Reviewing subscriptions/commitments could free up monthly room, if any are unused.",
                         reasoning="Recurring costs are a large share of your budget.", expected_benefit="frees monthly room",
                         effort="medium", confidence="normal", urgency="medium",

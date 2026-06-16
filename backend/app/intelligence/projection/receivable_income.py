@@ -49,13 +49,14 @@ async def expand_receivable_events(
 
     for r in rows:
         window = r.expected_time_window.value if r.expected_time_window else None
+        exact = r.expected_time
         if r.kind == ReceivableKind.one_time:
             if r.expected_date is None:
                 continue
             if r.expected_date > today:
-                events.append(IncomeEvent(r.expected_date, r.converted_amount, r.reliability, r.id, "receivable", window))
+                events.append(IncomeEvent(r.expected_date, r.converted_amount, r.reliability, r.id, "receivable", window, exact))
             else:  # overdue -> clamp to today, conservative reliability
-                events.append(IncomeEvent(today, r.converted_amount, r.reliability * OVERDUE_FACTOR, r.id, "receivable", window))
+                events.append(IncomeEvent(today, r.converted_amount, r.reliability * OVERDUE_FACTOR, r.id, "receivable", window, exact))
                 overdue.append(OverdueReceivable(r.id, r.converted_amount, (today - r.expected_date).days))
         else:  # recurring
             if r.recurrence_day is None:
@@ -63,6 +64,6 @@ async def expand_receivable_events(
             for year, month in iter_year_months(today, horizon):
                 occurrence = clamp_day(year, month, r.recurrence_day)
                 if today < occurrence <= horizon:
-                    events.append(IncomeEvent(occurrence, r.converted_amount, r.reliability, r.id, "receivable", window))
+                    events.append(IncomeEvent(occurrence, r.converted_amount, r.reliability, r.id, "receivable", window, exact))
 
     return events, overdue

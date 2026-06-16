@@ -42,15 +42,15 @@ def _data(**over) -> BehaviorData:
     return BehaviorData(**base)
 
 
-def test_registry_has_sixteen_metrics_across_six_dimensions():
-    assert len(METRIC_REGISTRY) == 16
+def test_registry_metric_count_across_six_dimensions():
+    assert len(METRIC_REGISTRY) == 33  # 16 (B1) + 5 (B1.5a) + 5 (B1.5b) + 7 (B1.5c)
     dims = {spec.dimension for spec in METRIC_REGISTRY.values()}
     assert dims == set(DIMENSION_ORDER)
 
 
 def test_cold_start_is_neutral_and_low_confidence():
     profile = build_profile_from_data(_data())
-    assert len(profile.metrics) == 16
+    assert len(profile.metrics) == 33
     assert all(m.confidence == "low" for m in profile.metrics)
     assert profile.composite_score == 50
     assert profile.confidence == "low"
@@ -83,7 +83,7 @@ def test_full_profile_structure():
         monthly_threshold=Decimal("12000"), monthly_income_estimate=Decimal("10000"),
         starting_balance=Decimal("50000"), salary_days=frozenset({1}),
     ))
-    assert len(profile.metrics) == 16
+    assert len(profile.metrics) == 33
     assert set(profile.dimensions) == set(DIMENSION_ORDER)
     assert 0 <= profile.composite_score <= 100
     normal = sum(1 for m in profile.metrics if m.confidence == "normal")
@@ -135,7 +135,7 @@ def test_to_facts_shape():
     facts = profile.to_facts()
     assert facts["schema_version"] == FACTS_SCHEMA_VERSION
     assert facts["currency"] == "INR"
-    assert len(facts["metrics"]) == 16
+    assert len(facts["metrics"]) == 33
     assert set(facts) >= {
         "today", "window", "composite_score", "confidence", "dimensions",
         "metrics", "strengths", "weaknesses", "opportunities", "risks", "signals", "advisor",

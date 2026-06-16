@@ -111,7 +111,10 @@ class RecommendationContext:
     recurring_load: dict[str, Any] | None = None     # recurring_cost_load metric facts
     available_savings: Decimal = Decimal("0")
     next_income: dict[str, Any] | None = None        # {"date", "amount"}
-    excluded_levers: tuple[str, ...] = ()
+    excluded_levers: tuple[str, ...] = ()            # strong excludes (removed unless requested)
+    soft_excluded_levers: tuple[str, ...] = ()       # heavily down-ranked but still shown (C7b)
+    boosts: dict[str, float] = field(default_factory=dict)   # lever -> ranking boost (C7b)
+    include_levers: tuple[str, ...] = ()             # force-include even if strongly excluded
 
 
 @dataclass(frozen=True)

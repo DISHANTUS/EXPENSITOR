@@ -12,4 +12,7 @@ from app.intelligence.behavior.metrics import (  # noqa: F401
     planning,
     savings,
     spending,
+    advanced,     # B1.5a
+    resilience,   # B1.5b
+    forecasting,  # B1.5c — registered last
 )

@@ -38,6 +38,7 @@ class BehavioralMetric:
     label: str                  # good | watch | concern | insufficient_data | <reason>
     trend: str                  # improving | flat | worsening | unknown
     confidence: str             # low | normal
+    trend_duration_months: int | None = None   # B1.5a: consecutive months the trend held
     facts: dict[str, Any] = field(default_factory=dict)
 
     def as_facts(self) -> dict[str, Any]:
@@ -48,6 +49,7 @@ class BehavioralMetric:
             "score": self.score,
             "label": self.label,
             "trend": self.trend,
+            "trend_duration_months": self.trend_duration_months,
             "confidence": self.confidence,
             "facts": self.facts,
         }
@@ -72,6 +74,7 @@ class SworItem:
     score: int
     trend: str
     confidence: str
+    trend_duration_months: int | None = None   # B1.5a
 
 
 @dataclass(frozen=True)
@@ -128,12 +131,20 @@ class BehavioralProfile:
         return self.advisor
 
     def personality_inputs(self) -> dict[str, Any]:
-        """C10 Personality Engine (stub): dimension vector + tagged metric scores."""
+        """C10 Personality Engine (stub): dimension vector + tagged metric scores.
+        B1.5b adds recovery personalities (S4/S11) for future recommendation ranking."""
         return {
             "dimensions": {name: dim.score for name, dim in self.dimensions.items()},
             "metrics": {m.key: m.score for m in self.metrics},
             "confidence": self.confidence,
+            "recovery_profile": self.advisor.get("recovery_profile"),
+            "stress_recovery_profile": self.advisor.get("stress_recovery_profile"),
+            "behavioral_memory": self.advisor.get("behavioral_memory", []),
         }
+
+    def behavioral_memory(self) -> list[dict[str, Any]]:
+        """B1.5c: read-only derived 'usually X' facts (NOT C7b preferences)."""
+        return self.advisor.get("behavioral_memory", [])
 
     def insights_payload(self) -> dict[str, Any]:
         """B2 Companion: the SWOR lists shaped for feed generation."""
@@ -175,5 +186,6 @@ def _swor(s: SworItem) -> dict[str, Any]:
         "level": s.level,
         "score": s.score,
         "trend": s.trend,
+        "trend_duration_months": s.trend_duration_months,
         "confidence": s.confidence,
     }

@@ -68,7 +68,7 @@ async def test_build_profile_end_to_end(db_session: AsyncSession):
 
     profile = await behavior_service.build_profile(db_session, uid, today=TODAY)
 
-    assert len(profile.metrics) == 16
+    assert len(profile.metrics) == 33
     assert 0 <= profile.composite_score <= 100
     assert profile.confidence in {"low", "normal"}
     # weekend metric has plenty of rows -> normal confidence, real value
@@ -76,13 +76,13 @@ async def test_build_profile_end_to_end(db_session: AsyncSession):
     assert weekend is not None and weekend.confidence == "normal" and weekend.value is not None
 
     facts = profile.to_facts()
-    assert facts["schema_version"] == 1 and len(facts["metrics"]) == 16
+    assert facts["schema_version"] == 1 and len(facts["metrics"]) == 33
     assert profile.base_currency == "INR"
 
 
 async def test_build_profile_new_user_is_cold_start(db_session: AsyncSession):
     uid = await _make_user(db_session)
     profile = await behavior_service.build_profile(db_session, uid, today=TODAY)
-    assert len(profile.metrics) == 16
+    assert len(profile.metrics) == 33
     assert profile.composite_score == 50
     assert profile.confidence == "low"

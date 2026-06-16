@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -27,6 +27,7 @@ class IncomeEvent:
     source_id: uuid.UUID
     origin: str = "income"  # e.g. "income_source:salary", "receivable" (for factor classification)
     time_window: str | None = None  # rough arrival time-of-day, when known (Income Timing)
+    exact_time: time | None = None  # exact arrival time, when known
 
 
 async def expand_income_events(
@@ -45,6 +46,7 @@ async def expand_income_events(
     events: list[IncomeEvent] = []
     for source in sources:
         window = source.expected_time_window.value if source.expected_time_window else None
+        exact = source.expected_time
         if source.kind == IncomeKind.recurring:
             if source.recurrence_day is None:
                 continue
@@ -54,7 +56,7 @@ async def expand_income_events(
                     events.append(
                         IncomeEvent(
                             occurrence, source.converted_amount, source.reliability, source.id,
-                            f"income_source:{source.source_type.value}", window,
+                            f"income_source:{source.source_type.value}", window, exact,
                         )
                     )
         else:  # one_time
@@ -62,7 +64,7 @@ async def expand_income_events(
                 events.append(
                     IncomeEvent(
                         source.expected_date, source.converted_amount, source.reliability, source.id,
-                        f"income_source:{source.source_type.value}", window,
+                        f"income_source:{source.source_type.value}", window, exact,
                     )
                 )
 

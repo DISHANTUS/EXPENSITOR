@@ -48,6 +48,21 @@ ARCHETYPES = (
 )
 
 
+# Notification kinds a metric can generate (R4 — future scheduler readiness).
+WARNING, OPPORTUNITY, REMINDER, ACHIEVEMENT = "warning", "opportunity", "reminder", "achievement"
+
+
+def default_notification_kinds(direction: str, controllable: bool, forward_risk: bool) -> tuple[str, ...]:
+    kinds: list[str] = []
+    if forward_risk:
+        kinds.append(WARNING)
+    if controllable:
+        kinds.append(OPPORTUNITY)
+    if direction == HIGHER_BETTER:
+        kinds.append(ACHIEVEMENT)
+    return tuple(kinds)
+
+
 @dataclass(frozen=True)
 class MetricSpec:
     key: str
@@ -57,6 +72,7 @@ class MetricSpec:
     forward_risk: bool          # worsening trend implies future harm -> feeds risks[]
     compute: Callable           # (BehaviorData) -> BehavioralMetric
     personality_tags: tuple[str, ...] = field(default_factory=tuple)
+    notification_kinds: tuple[str, ...] = field(default_factory=tuple)  # R4
 
 
 # Insertion-ordered registry (Python dicts preserve order).
@@ -71,6 +87,7 @@ def register(
     controllable: bool = False,
     forward_risk: bool = False,
     personality_tags: tuple[str, ...] = (),
+    notification_kinds: tuple[str, ...] | None = None,
 ) -> Callable[[Callable], Callable]:
     def _decorator(fn: Callable) -> Callable:
         if key in METRIC_REGISTRY:
@@ -83,6 +100,9 @@ def register(
             forward_risk=forward_risk,
             compute=fn,
             personality_tags=personality_tags,
+            notification_kinds=(notification_kinds
+                                if notification_kinds is not None
+                                else default_notification_kinds(direction, controllable, forward_risk)),
         )
         return fn
 

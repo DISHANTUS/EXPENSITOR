@@ -27,7 +27,7 @@ from app.intelligence.decision.request import (
 )
 from app.models import Expense, Income, SavingsGoal
 from app.models.enums import SavingsGoalStatus
-from app.services import behavior_service, currency_service, projection_service
+from app.services import behavior_service, currency_service, preference_service, projection_service
 
 _RESCHEDULE_BUFFER_DAYS = 60
 _BASE_HORIZON_DAYS = 92
@@ -64,6 +64,11 @@ async def quote(
         db, original_amount, original_currency, scenario.base_currency
     )
 
+    # C7b: fold the user's policy-excluded strategies into the request (options only).
+    policy_row = await preference_service.get_policy(db, user_id)
+    policy_excluded = preference_service.excluded_strategies(policy_row.policy or {})
+    excluded_strategies = tuple(sorted(set(excluded_strategies) | set(policy_excluded)))
+
     request = DecisionRequest(
         item_label=item_label,
         amount_base=converted,
@@ -79,22 +84,25 @@ async def quote(
     )
 
     # Behavioral advisor view powers smarter "reduce spending" suggestions (optional).
-    behavior_view: dict | None = None
     profile = await behavior_service.build_profile(db, user_id, today=scenario.today)
-    if profile.confidence == "normal":
-        behavior_view = profile.advisor_view()
+    engine_view = profile.advisor_view() if profile.confidence == "normal" else None
 
-    result = engine.evaluate(scenario, request, behavior_view=behavior_view)
+    result = engine.evaluate(scenario, request, behavior_view=engine_view)
     explanation = explainers.explain_decision(result)
 
     # --- C7a-2 decision modifier analyzers ---
+    # B1.5a: enrich the analyzer view with the behavioral METRICS the lifestyle /
+    # upgrade analyzers read (each gates on its own confidence) — no recompute.
+    analyzer_view = {**profile.advisor_view(),
+                     "metrics": _metric_view(profile, ("lifestyle_inflation", "upgrade_replacement_behavior",
+                                                       "spending_escalation_rate"))}
     intended = target_date if (target_date and target_date >= scenario.today) else scenario.today
     goals = await _active_goals(db, user_id)
     net_so_far = await _net_so_far(db, user_id, scenario.today) if goals else Decimal("0")
     ctx = AnalyzerCtx(
         request=request, attributes=result.attributes, scenario=scenario,
         inputs=modifier_inputs or ModifierInputs(), currency=scenario.base_currency,
-        amount=converted, when=intended, behavior_view=behavior_view, decision_result=result,
+        amount=converted, when=intended, behavior_view=analyzer_view, decision_result=result,
         goals=goals, net_so_far=net_so_far,
     )
     modifiers = modifier_engine.run(ctx)
@@ -114,6 +122,17 @@ async def quote(
         "pending_questions": modifiers["pending_questions"],
         "modifier_explanations": modifier_explanations,
     }
+
+
+def _metric_view(profile, keys: tuple[str, ...]) -> dict[str, dict]:
+    """Project selected behavioral metrics for the modifier analyzers (read-only)."""
+    out: dict[str, dict] = {}
+    for key in keys:
+        m = profile.metric(key)
+        if m is not None:
+            out[key] = {"score": m.score, "trend": m.trend, "confidence": m.confidence,
+                        "trend_duration_months": m.trend_duration_months, "facts": m.facts}
+    return out
 
 
 async def _active_goals(db: AsyncSession, user_id: uuid.UUID) -> tuple[GoalRef, ...]:

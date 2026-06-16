@@ -71,7 +71,7 @@ def _to_read(r: Receivable, today: date) -> ReceivableRead:
         exchange_rate=r.exchange_rate, converted_amount=r.converted_amount, base_currency=r.base_currency,
         expected_date=r.expected_date, recurrence_day=r.recurrence_day,
         next_expected_date=_next_expected_date(r, today), reliability=r.reliability, notes=r.notes,
-        expected_time_window=r.expected_time_window,
+        expected_time_window=r.expected_time_window, expected_time=r.expected_time,
         received_at=r.received_at, last_follow_up_at=r.last_follow_up_at, follow_up_count=r.follow_up_count,
         created_at=r.created_at, updated_at=r.updated_at,
     )
@@ -117,7 +117,7 @@ async def create(db: AsyncSession, user_id: uuid.UUID, data: ReceivableCreate) -
         original_currency=data.original_currency, exchange_rate=rate, converted_amount=converted,
         base_currency=settings.base_currency, expected_date=data.expected_date,
         recurrence_day=data.recurrence_day, reliability=reliability, notes=data.notes,
-        expected_time_window=data.expected_time_window,
+        expected_time_window=data.expected_time_window, expected_time=data.expected_time,
     )
     db.add(row)
     await db.flush()
@@ -186,7 +186,7 @@ async def update(
         row.status = new_status
 
     for field in ("title", "source_name", "source_type", "kind", "notes", "reliability",
-                  "recurrence_day", "expected_date", "expected_time_window"):
+                  "recurrence_day", "expected_date", "expected_time_window", "expected_time"):
         if field in updates:
             setattr(row, field, updates[field])
 

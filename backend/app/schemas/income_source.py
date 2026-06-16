@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated
 
@@ -37,6 +37,7 @@ class IncomeSourceCreate(BaseModel):
     recurrence_day: int | None = Field(default=None, ge=1, le=31)
     expected_date: date | None = None
     expected_time_window: ExpectedTimeWindow | None = None
+    expected_time: time | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -72,6 +73,7 @@ class IncomeSourceUpdate(BaseModel):
     recurrence_day: int | None = Field(default=None, ge=1, le=31)
     expected_date: date | None = None
     expected_time_window: ExpectedTimeWindow | None = None
+    expected_time: time | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -96,6 +98,7 @@ class IncomeSourceRead(BaseModel):
     reliability: Decimal
     is_active: bool
     expected_time_window: ExpectedTimeWindow | None
+    expected_time: time | None
     created_at: datetime
     updated_at: datetime
 

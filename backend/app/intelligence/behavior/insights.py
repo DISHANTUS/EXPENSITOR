@@ -92,6 +92,20 @@ def _goal_links(ctx: InsightContext, money_reducing: bool) -> tuple[dict[str, An
                  for kind, name in ctx.goals)
 
 
+# R1: a long-running deterioration matters more than a one-off dip.
+def _persistence(item) -> int:
+    return item.trend_duration_months or 0
+
+
+def _dur_suffix(item) -> str:
+    d = _persistence(item)
+    return f" It's been worsening for {d} months." if (item.trend == "worsening" and d >= 2) else ""
+
+
+def _dur_priority(item) -> float:
+    return min(0.3, 0.05 * _persistence(item)) if item.trend == "worsening" else 0.0
+
+
 # --- per-kind builders ------------------------------------------------------
 def _strength(item: SworItem, months: int) -> BehavioralInsight:
     return BehavioralInsight(
@@ -119,9 +133,10 @@ def _weakness(item: SworItem, av: dict, ctx: InsightContext, currency: str, mont
         kind=WEAKNESS, metric_key=item.metric_key, dimension=item.dimension,
         finding=item.statement, impact="This is reducing how much you can keep each month.",
         reasoning=reasoning, recommendation=rec,
-        consequences="If it continues, less will be available for your goals and plans.",
+        consequences="If it continues, less will be available for your goals and plans." + _dur_suffix(item),
         confidence_note=_confidence_note(item.confidence, months), score=item.score, trend=item.trend,
-        trend_duration_months=None, confidence=item.confidence, priority=(100 - item.score) / 100.0,
+        trend_duration_months=item.trend_duration_months, confidence=item.confidence,
+        priority=(100 - item.score) / 100.0 + _dur_priority(item),
         goal_links=_goal_links(ctx, money_reducing=True),
         facts={"level": item.level, "top_contributor": overspend, "suggested_cut": cut},
     )
@@ -148,11 +163,12 @@ def _risk(item: SworItem, ctx: InsightContext, months: int) -> BehavioralInsight
     return BehavioralInsight(
         kind=RISK, metric_key=item.metric_key, dimension=item.dimension,
         finding=item.statement, impact="This behaviour is trending the wrong way.",
-        reasoning=f"Trend is {item.trend} (score {item.score}/100).",
+        reasoning=f"Trend is {item.trend} (score {item.score}/100)." + _dur_suffix(item),
         recommendation="Easing off here would steady things, if keeping a buffer matters to you.",
         consequences="If the trend continues it could pressure your budget (a behaviour signal, not insolvency).",
         confidence_note=_confidence_note(item.confidence, months), score=item.score, trend=item.trend,
-        trend_duration_months=None, confidence=item.confidence, priority=(100 - item.score) / 100.0 + 0.1,
+        trend_duration_months=item.trend_duration_months, confidence=item.confidence,
+        priority=(100 - item.score) / 100.0 + 0.1 + _dur_priority(item),
         goal_links=_goal_links(ctx, money_reducing=True), facts={"level": item.level},
     )
 
@@ -227,6 +243,22 @@ def _dependency(dep: dict, currency: str) -> BehavioralInsight:
     )
 
 
+# R2: the one synthesized "biggest pressure" headline, ahead of the symptoms.
+def _root_cause_insight(profile: BehavioralProfile) -> BehavioralInsight | None:
+    rc = (profile.advisor or {}).get("root_cause")
+    if not rc:
+        return None
+    return BehavioralInsight(
+        kind=RISK, metric_key="root_cause", dimension="cashflow_health",
+        finding=rc["statement"], impact="This is the single biggest pull on your savings right now.",
+        reasoning="Several of your behaviour signals point the same way.",
+        recommendation="Focusing here first has the largest effect, if saving more matters to you.",
+        consequences="Left unaddressed, it keeps limiting what you can save.",
+        confidence_note=None, score=40, trend="worsening", trend_duration_months=None,
+        confidence="normal", priority=1.0, facts=dict(rc),
+    )
+
+
 # --- top-level ---------------------------------------------------------------
 def build_behavioral_insights(
     profile: BehavioralProfile, *, context: InsightContext | None = None, max_per_kind: int = 3
@@ -237,6 +269,9 @@ def build_behavioral_insights(
     months = int(profile.window.get("complete_months", 0))
 
     insights: list[BehavioralInsight] = []
+    root = _root_cause_insight(profile)
+    if root is not None:
+        insights.append(root)
     insights += [_strength(s, months) for s in sorted(profile.strengths, key=lambda s: -s.score)[:max_per_kind]]
     insights += [_weakness(w, av, ctx, cur, months) for w in sorted(profile.weaknesses, key=lambda s: s.score)[:max_per_kind]]
     insights += [_opportunity(o, av, cur, months)

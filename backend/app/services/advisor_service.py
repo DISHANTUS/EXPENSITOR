@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.intelligence.advisor import explainers
 from app.intelligence.advisor.context_block import build_context
-from app.services import behavior_service, projection_service
+from app.intelligence.commentary import context as ctxmod
+from app.services import behavior_service, commentary_service, projection_service
 
 
 async def daily_brief(db: AsyncSession, user_id: uuid.UUID, *, today: date | None = None) -> dict[str, Any]:
@@ -35,7 +36,8 @@ async def daily_brief(db: AsyncSession, user_id: uuid.UUID, *, today: date | Non
     if profile.confidence == "normal":
         explanations.append(explainers.explain_behavior(profile).as_dict())
 
-    return {"context": context.as_dict(), "explanations": explanations}
+    commentary = await commentary_service.narrate(db, user_id, trigger=ctxmod.DAILY_BRIEF, today=scenario.today)
+    return {"context": context.as_dict(), "explanations": explanations, "commentary": commentary}
 
 
 async def dependencies(db: AsyncSession, user_id: uuid.UUID, *, today: date | None = None) -> dict[str, Any]:

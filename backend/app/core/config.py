@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     # --- Exchange-rate provider ---
     FRANKFURTER_BASE_URL: str = "https://api.frankfurter.app"
 
+    # --- Optional Ollama narrator (C5 Phase 3b) ---
+    # Disabled by default: the app is fully functional on the deterministic
+    # commentary alone. Ollama may ONLY rephrase already-computed narration;
+    # it never calculates, decides, or changes any financial fact. Local only.
+    OLLAMA_ENABLED: bool = False
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.1:8b-instruct-q4_K_M"
+    OLLAMA_TIMEOUT_SECONDS: float = 2.0
+    OLLAMA_NARRATION_STYLE: str = "balanced"  # concise | balanced | detailed
+
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def _assemble_cors_origins(cls, value: object) -> list[str]:

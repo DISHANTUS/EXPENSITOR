@@ -24,7 +24,9 @@ class LifeEasierContext:
     monthly_discretionary_remaining: Decimal | None
     days_until_next_income: int | None
     next_income_date: date | None
-    income_time_window: str | None = None          # future hook (income timing)
+    income_time_window: str | None = None          # rough arrival window, when known
+    income_time_exact: str | None = None           # exact arrival time, when known
+    next_income_amount: Decimal | None = None
     savings_progress: Decimal | None = None         # future/optional (needs a goal)
     amount_still_needed: Decimal | None = None
 
@@ -40,6 +42,8 @@ class LifeEasierContext:
             "days_until_next_income": self.days_until_next_income,
             "next_income_date": self.next_income_date.isoformat() if self.next_income_date else None,
             "income_time_window": self.income_time_window,
+            "income_time_exact": self.income_time_exact,
+            "next_income_amount": str(self.next_income_amount) if self.next_income_amount is not None else None,
             "savings_progress": str(self.savings_progress) if self.savings_progress is not None else None,
             "amount_still_needed": str(self.amount_still_needed) if self.amount_still_needed is not None else None,
         }
@@ -70,6 +74,9 @@ def build_context(
         monthly_discretionary_remaining=guidance.threshold_remaining,
         days_until_next_income=days_until,
         next_income_date=next_event.date if next_event else None,
+        income_time_window=next_event.time_window if next_event else None,
+        income_time_exact=(next_event.exact_time.strftime("%H:%M") if next_event and next_event.exact_time else None),
+        next_income_amount=next_event.amount_base if next_event else None,
         savings_progress=savings_progress,
         amount_still_needed=amount_still_needed,
     )

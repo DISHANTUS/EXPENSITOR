@@ -82,6 +82,7 @@ class CompanionEntityType(str, enum.Enum):
     category = "category"
     goal = "goal"
     behavior = "behavior"  # behavioral-intelligence insights (B2)
+    recommendation = "recommendation"  # recommendation feedback audit (C7b)
 
 
 class CompanionSeverity(str, enum.Enum):
@@ -183,3 +184,20 @@ class ExpectedTimeWindow(str, enum.Enum):
     evening = "evening"
     night = "night"
     no_fixed_time = "no_fixed_time"
+
+
+class RecommendationAction(str, enum.Enum):
+    """User feedback on a recommendation (C7b). Preference signal only — never
+    auto-executes or changes any financial fact."""
+
+    accepted = "accepted"
+    rejected = "rejected"
+    deferred = "deferred"
+
+
+class RejectionReason(str, enum.Enum):
+    not_now = "not_now"
+    date_fixed = "date_fixed"
+    dislike_approach = "dislike_approach"
+    too_much_effort = "too_much_effort"
+    other = "other"
