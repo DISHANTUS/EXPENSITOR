@@ -7,7 +7,7 @@ weight used by the conservative (worst/expected/best) projection.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -15,6 +15,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -27,7 +28,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import IncomeKind, IncomeSourceType
+from app.models.enums import ExpectedTimeWindow, IncomeKind, IncomeSourceType
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -80,9 +81,16 @@ class IncomeSource(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reliability: Mapped[Decimal] = mapped_column(
         Numeric(4, 3), default=Decimal("0.5"), server_default=text("0.5"), nullable=False
     )
+    # Income Timing Intelligence: rough arrival window (NULL = unknown, never assumed).
+    expected_time_window: Mapped[ExpectedTimeWindow | None] = mapped_column(
+        SAEnum(ExpectedTimeWindow, name="expected_time_window", native_enum=False, create_constraint=False, length=20)
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
+
+    # Soft delete: excluded from normal queries; preserved for history/sync.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="income_sources")
 

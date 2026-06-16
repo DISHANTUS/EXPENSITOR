@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Index, Numeric, String
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,6 +49,9 @@ class Income(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     description: Mapped[str | None] = mapped_column(String(500))
     received_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # Soft delete: excluded from normal queries; preserved for history/sync.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="incomes")
 

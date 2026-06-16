@@ -14,6 +14,7 @@ import logging
 from app.core.database import AsyncSessionLocal
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
+from app.seed.exchange_rates import seed_exchange_rates
 
 logger = logging.getLogger("expensitor.seed")
 
@@ -21,11 +22,14 @@ logger = logging.getLogger("expensitor.seed")
 async def seed_all() -> None:
     async with AsyncSessionLocal() as session:
         currencies = await seed_currencies(session)
+        rates = await seed_exchange_rates(session)
         categories = await seed_categories(session)
         await session.commit()
     logger.info(
-        "Seeding complete: %d currencies ensured, %d system categories inserted.",
+        "Seeding complete: %d currencies ensured, %d exchange rates ensured, "
+        "%d system categories inserted.",
         currencies,
+        rates,
         categories,
     )
 

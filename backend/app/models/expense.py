@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -53,7 +54,7 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     merchant_name: Mapped[str | None] = mapped_column(String(255))
     payment_method: Mapped[str | None] = mapped_column(String(50))
     notes: Mapped[str | None] = mapped_column(Text)
-    spent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expense_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     category_source: Mapped[CategorySource | None] = mapped_column(
         SAEnum(
@@ -78,6 +79,6 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "(category_confidence >= 0 AND category_confidence <= 1)",
             name="ck_expenses_category_confidence_range",
         ),
-        Index("ix_expenses_user_id_spent_at", "user_id", "spent_at"),
+        Index("ix_expenses_user_id_expense_date", "user_id", "expense_date"),
         Index("ix_expenses_user_id_category_id", "user_id", "category_id"),
     )
