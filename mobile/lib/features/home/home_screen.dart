@@ -14,6 +14,7 @@ import '../../core/format/dates.dart';
 import '../../core/theme/glass.dart';
 import '../calendar/calendar_models.dart';
 import '../calendar/calendar_repository.dart';
+import 'add_event_sheet.dart';
 import 'dashboard_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -46,6 +47,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ? CompanionMood.concerned
           : moodFromSeverity(brief.valueOrNull?.severity),
       extraLines: thought?.lines ?? const [],
+      actions: [
+        IconButton(
+          tooltip: 'Add to calendar',
+          icon: const Icon(Icons.add),
+          onPressed: () => showAddEventSheet(context),
+        ),
+      ],
       child: ListView(
         children: [
           const _QuickActions(),
