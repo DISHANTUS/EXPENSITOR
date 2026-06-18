@@ -95,8 +95,16 @@ class UserSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     voice_length: Mapped[str] = mapped_column(
         String(10), default="normal", server_default=text("'normal'"), nullable=False
     )
+    # Chosen device TTS voice (Voice Studio, UI-X). flutter_tts voice name + locale,
+    # both device-specific. None = use the system default. Applied on launch if the
+    # voice still exists on the device; harmless if it doesn't.
+    selected_voice: Mapped[str | None] = mapped_column(String(120))
+    voice_locale: Mapped[str | None] = mapped_column(String(20))
     # The companion's name (Sprint 6c). None = unnamed (stays generic).
     companion_name: Mapped[str | None] = mapped_column(String(40))
+    # What the user wants to be called (asked in onboarding). None = use a neutral
+    # greeting. The email is never used as a display identity.
+    display_name: Mapped[str | None] = mapped_column(String(60))
     # Audit of preferred-currency periods: [{currency, from, to?}, ...]. Enables
     # "show my spending before I moved to Japan".
     currency_history: Mapped[list[Any] | None] = mapped_column(JSONB)

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Expense, Receivable, SavingsGoal
 from app.models.enums import ReceivableKind, ReceivableStatus, SavingsGoalKind, SavingsGoalStatus
+from app.intelligence.budget import life_changes
 from app.intelligence.companion import app_help
 from app.intelligence.learning import lessons as _lessons
 from app.schemas.advisor_chat import ChatContext, ChatOption, ChatTurn
@@ -31,6 +32,7 @@ from app.services import (
     explain_service,
     forecast_service,
     life_lesson_service,
+    profile_mutation_service,
     reflection_service,
     settings_service,
     timeline_service,
@@ -351,6 +353,22 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: C
     today = await calendar_service.user_today(db, user_id)
     t = message.lower().strip()
     ctx = _ctx(session)
+
+    # --- conversational profile mutation (Phase 5): tell Advary about life changes ---
+    if ctx.pending_profile_text:
+        if re.search(r"\b(yes|yeah|yep|sure|go ahead|do it|apply|confirm|update|okay|ok)\b", t):
+            result = await profile_mutation_service.apply(db, user_id, ctx.pending_profile_text)
+            return ChatTurn(type="profile_updated", message=result.message, confidence="high",
+                            session=ctx.model_copy(update={"pending_profile_text": None}))
+        if re.search(r"\b(no|nope|cancel|never ?mind|don'?t|stop)\b", t):
+            return _answer("Okay, I won't change anything.",
+                           ctx.model_copy(update={"pending_profile_text": None}), confidence="high")
+    if life_changes.parse(message, today):
+        proposal = await profile_mutation_service.propose(db, user_id, message)
+        return ChatTurn(type="profile_preview", message=proposal.preview, confidence="high",
+                        follow_ups=[ChatOption(label="Yes, update", message="yes, update my profile"),
+                                    ChatOption(label="No", message="no, leave it")],
+                        session=ctx.model_copy(update={"pending_profile_text": message}))
 
     # --- teach the app: launch the tour / answer "how do I…" (works by voice too) ---
     if app_help.wants_tour(t):

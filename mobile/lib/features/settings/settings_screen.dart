@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/mood_repository.dart';
 import '../../core/companion/companion_scaffold.dart';
 import '../../core/future_me/future_me_repository.dart';
@@ -140,6 +141,35 @@ Future<void> changeCompanionName(BuildContext context, WidgetRef ref, String? cu
   }
 }
 
+/// What the user wants to be called — shown in the drawer instead of their email.
+Future<void> changeDisplayName(BuildContext context, WidgetRef ref, String? current) async {
+  final ctrl = TextEditingController(text: current ?? '');
+  final picked = await showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('What should I call you?'),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Your name'),
+        onSubmitted: (v) => Navigator.pop(c, v.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, ''), child: const Text('Clear')),
+        TextButton(onPressed: () => Navigator.pop(c, null), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, ctrl.text.trim()), child: const Text('Save')),
+      ],
+    ),
+  );
+  if (picked == null) return;
+  try {
+    await ref.read(settingsRepositoryProvider).setDisplayName(picked);
+    ref.invalidate(userSettingsProvider);
+  } on AppError catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
 /// Lets the user change anything that uses their preferred currency everywhere.
 Future<void> changePreferredCurrency(BuildContext context, WidgetRef ref) async {
   final codes = await ref.read(currenciesProvider.future).catchError((_) => <String>['INR', 'USD', 'EUR', 'GBP', 'JPY']);
@@ -212,12 +242,55 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(userSettingsProvider);
     final isDev = ref.watch(authControllerProvider).user?.isDeveloper ?? false;
+    final email = ref.watch(authControllerProvider).user?.email;
+    final profile = ref.watch(profileProvider).valueOrNull;
     return CompanionScaffold(
       title: 'Settings',
       commentary: 'Set the currency you think in — I’ll use it everywhere.',
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 4),
+            child: Text('Personal details', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Your name'),
+              subtitle: const Text('What I call you'),
+              trailing: Text(settings.valueOrNull?.displayName ?? 'Add',
+                  style: Theme.of(context).textTheme.titleMedium),
+              onTap: () => changeDisplayName(context, ref, settings.valueOrNull?.displayName),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.alternate_email),
+              title: const Text('Email'),
+              subtitle: const Text('The account you signed in with'),
+              trailing: Text(email ?? '—', style: Theme.of(context).textTheme.bodySmall),
+            ),
+          ),
+          if (profile?['life_stage'] != null || profile?['current_country'] != null)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('Profile'),
+                subtitle: Text([
+                  if (profile?['current_country'] != null) profile!['current_country'].toString(),
+                  if (profile?['life_stage'] != null)
+                    profile!['life_stage'].toString().replaceAll('_', ' '),
+                ].join(' · ')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go('/budget-setup'),
+              ),
+            ),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 4, 4, 4),
+            child: Text('Companion & money', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
           Card(
             child: ListTile(
               leading: const Icon(Icons.payments_outlined),
@@ -250,9 +323,20 @@ class SettingsScreen extends ConsumerWidget {
           ),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.record_voice_over_outlined),
-              title: const Text('Advisor tone'),
-              trailing: Text(settings.valueOrNull?.aiTone ?? '—'),
+              leading: const Icon(Icons.badge_outlined),
+              title: const Text('Your profile & budget'),
+              subtitle: const Text('Country, life stage, income, goals — change anything'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/profile-summary'),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.insights_outlined),
+              title: const Text('Your plan'),
+              subtitle: const Text('Feasibility, probability and ways to reach your goal'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/plan'),
             ),
           ),
           Card(
@@ -285,8 +369,22 @@ class SettingsScreen extends ConsumerWidget {
               title: const Text('Test voice'),
               subtitle: const Text('Hear how the companion sounds'),
               trailing: const Icon(Icons.play_arrow),
-              onTap: () => ref.read(voiceControllerProvider.notifier)
-                  .speak('Hi, I’m your Expensitor companion. This is how I sound.'),
+              onTap: () {
+                final name = (settings.valueOrNull?.companionName?.trim().isNotEmpty ?? false)
+                    ? settings.valueOrNull!.companionName!.trim()
+                    : 'Advary';
+                ref.read(voiceControllerProvider.notifier)
+                    .speak('Hi, I’m $name. This is how I sound when we talk.');
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.record_voice_over_outlined),
+              title: const Text('Voice Studio'),
+              subtitle: const Text('Pick the voice Advary speaks with'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/voice-studio'),
             ),
           ),
           _VoiceToggles(prefs: settings.valueOrNull?.notificationPreferences ?? const {}),

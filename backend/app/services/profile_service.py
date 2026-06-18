@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import FinancialProfile
@@ -20,8 +21,14 @@ async def get_profile(db: AsyncSession, user_id: uuid.UUID) -> FinancialProfile:
     if row is None:
         row = FinancialProfile(user_id=user_id)
         db.add(row)
-        await db.commit()
-        await db.refresh(row)
+        try:
+            await db.commit()
+            await db.refresh(row)
+        except IntegrityError:
+            # Concurrent first-read (e.g. feasibility + recommendations fired together)
+            # already created it — roll back and use the existing row.
+            await db.rollback()
+            row = await db.scalar(select(FinancialProfile).where(FinancialProfile.user_id == user_id))
     return row
 
 

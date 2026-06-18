@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/companion/companion_mood.dart';
 import '../../core/companion/companion_scaffold.dart';
+import '../../core/companion/widgets/glow_rail.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/timeline/timeline_models.dart';
 import '../../core/timeline/timeline_repository.dart';
 
@@ -123,11 +126,14 @@ class _ChaptersView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (timeline.isEmpty) return const _Empty();
     final children = <Widget>[];
+    var idx = 0;
     for (final chapter in timeline.chapters) {
       final shown = chapter.entries.where((e) => _inGroup(e, group)).toList();
       if (shown.isEmpty) continue;
-      children.add(_ChapterHeader(label: chapter.label, subtitle: chapter.subtitle));
-      children.addAll(shown.map((e) => _EntryTile(entry: e)));
+      children.add(_ChapterBanner(label: chapter.label, subtitle: chapter.subtitle));
+      for (var i = 0; i < shown.length; i++) {
+        children.add(_JourneyEntry(entry: shown[i], index: idx++, last: i == shown.length - 1));
+      }
     }
     if (children.isEmpty) {
       children.add(const Padding(padding: EdgeInsets.all(32),
@@ -135,7 +141,7 @@ class _ChaptersView extends StatelessWidget {
     }
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
-      child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: children),
+      child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 40), children: children),
     );
   }
 }
@@ -150,11 +156,12 @@ class _SearchResults extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => const Center(child: Text('Search failed — try again.')),
       data: (res) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
           Padding(padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(res.summary, style: Theme.of(context).textTheme.titleSmall)),
-          for (final e in res.entries) _EntryTile(entry: e),
+          for (var i = 0; i < res.entries.length; i++)
+            _JourneyEntry(entry: res.entries[i], index: i, last: i == res.entries.length - 1),
         ],
       ),
     );
@@ -224,109 +231,153 @@ Future<void> _showAddMilestone(BuildContext context, WidgetRef ref) async {
   }
 }
 
-class _ChapterHeader extends StatelessWidget {
-  const _ChapterHeader({required this.label, this.subtitle = ''});
+/// A glowing chapter divider — "━━ STARTING OUT ━━".
+class _ChapterBanner extends StatelessWidget {
+  const _ChapterBanner({required this.label, this.subtitle = ''});
   final String label;
   final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    Widget line(bool toCenter) => Container(
+          height: 1.5,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: toCenter ? Alignment.centerLeft : Alignment.centerRight,
+              end: toCenter ? Alignment.centerRight : Alignment.centerLeft,
+              colors: [Colors.transparent, AppColors.primary.withValues(alpha: 0.5)],
+            ),
+          ),
+        );
     return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 6),
+      padding: const EdgeInsets.only(top: 20, bottom: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Text(label, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary)),
-            const SizedBox(width: 10),
-            Expanded(child: Divider(color: cs.outlineVariant)),
-          ]),
+          Row(
+            children: [
+              Expanded(child: line(true)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  label.toUpperCase(),
+                  style: tt.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                    color: AppColors.primary,
+                    shadows: [Shadow(color: AppColors.primary.withValues(alpha: 0.6), blurRadius: 12)],
+                  ),
+                ),
+              ),
+              Expanded(child: line(false)),
+            ],
+          ),
           if (subtitle.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 2),
-                child: Text(subtitle, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(subtitle,
+                  textAlign: TextAlign.center,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 450.ms).scaleX(begin: 0.85, end: 1, curve: Curves.easeOut);
   }
 }
 
-class _EntryTile extends StatelessWidget {
-  const _EntryTile({required this.entry});
+/// One life event on the glowing rail. Milestones glow + shimmer once; future
+/// events are dimmer with an "Ahead" tag; people are tappable to their page.
+class _JourneyEntry extends StatelessWidget {
+  const _JourneyEntry({required this.entry, required this.index, required this.last});
   final TimelineEntry entry;
+  final int index;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final color = colorForKind(entry.kind);
     final milestone = entry.isMilestone;
     final future = entry.isFuture;
-    final bg = milestone ? cs.tertiaryContainer : (future ? cs.surface : cs.surfaceContainerHighest);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // The rail: an emoji dot + a connecting line.
-          Column(
-            children: [
-              CircleAvatar(radius: 18, backgroundColor: cs.surfaceContainerHighest,
-                  child: Text(entry.icon, style: const TextStyle(fontSize: 18))),
-              Container(width: 2, height: 26, color: cs.outlineVariant),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: entry.person == null ? null
-                  : () => context.go('/relationship/${Uri.encodeComponent(entry.person!)}'),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: future
-                      ? Border.all(color: cs.outline.withValues(alpha: 0.5), style: BorderStyle.solid)
-                      : null,
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      gradient: milestone
+          ? LinearGradient(
+              colors: [AppColors.accent.withValues(alpha: 0.30), AppColors.primary.withValues(alpha: 0.12)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight)
+          : null,
+      color: milestone ? null : Colors.white.withValues(alpha: future ? 0.03 : 0.05),
+      border: Border.all(
+          color: milestone
+              ? AppColors.accent.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: future ? 0.12 : 0.08)),
+      boxShadow: milestone
+          ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 8))]
+          : null,
+    );
+
+    final card = InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: entry.person == null
+          ? null
+          : () => context.go('/relationship/${Uri.encodeComponent(entry.person!)}'),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: decoration,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(entry.title,
+                      style: tt.bodyMedium?.copyWith(fontWeight: milestone ? FontWeight.w800 : FontWeight.w600)),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(entry.title,
-                              style: tt.bodyMedium?.copyWith(
-                                  fontWeight: milestone ? FontWeight.w700 : FontWeight.w500)),
-                        ),
-                        if (entry.person != null)
-                          Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
-                        if (future)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                                color: cs.primaryContainer, borderRadius: BorderRadius.circular(10)),
-                            child: Text('Ahead', style: tt.labelSmall),
-                          ),
-                      ],
-                    ),
-                    if (entry.detail.isNotEmpty)
-                      Padding(padding: const EdgeInsets.only(top: 2),
-                          child: Text(entry.detail, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
-                    if (entry.date != null)
-                      Padding(padding: const EdgeInsets.only(top: 4),
-                          child: Text(entry.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant))),
-                  ],
-                ),
-              ),
+                if (entry.person != null)
+                  Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
+                if (future)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text('Ahead', style: tt.labelSmall),
+                  ),
+              ],
             ),
-          ),
-        ],
+            if (entry.detail.isNotEmpty)
+              Padding(padding: const EdgeInsets.only(top: 3),
+                  child: Text(entry.detail, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
+            if (entry.date != null)
+              Padding(padding: const EdgeInsets.only(top: 5),
+                  child: Text(entry.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant))),
+          ],
+        ),
       ),
     );
+
+    final row = JourneyRow(
+      emoji: entry.icon,
+      color: color,
+      highlight: milestone,
+      dim: future,
+      last: last,
+      child: card,
+    );
+
+    var animated = row
+        .animate(delay: (index.clamp(0, 10) * 45).ms)
+        .fadeIn(duration: 350.ms)
+        .slideY(begin: 0.08, end: 0, curve: Curves.easeOut);
+    if (milestone) {
+      // A single celebratory sweep across the milestone card (once, on reveal).
+      animated = animated.shimmer(
+          delay: 250.ms, duration: 1100.ms, color: Colors.white.withValues(alpha: 0.22));
+    }
+    return animated;
   }
 }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 
@@ -15,9 +16,23 @@ from app.schemas.companion import (
     CompanionInsightOut,
     UnreadCountOut,
 )
+from app.schemas.date_reaction import DateReaction
+from app.schemas.evolution import EvolutionView, MonthlyReflection
+from app.schemas.home_cards import HomeCards
+from app.schemas.home_stats import HomeStats
+from app.schemas.home_thought import HomeThought
 from app.schemas.mood import MoodState
 from app.schemas.tour import TourCompleteOut, TourOut, TourStepOut
-from app.services import companion_service, mood_service, settings_service
+from app.services import (
+    companion_evolution_service,
+    companion_service,
+    date_reaction_service,
+    home_cards_service,
+    home_stats_service,
+    home_thought_service,
+    mood_service,
+    settings_service,
+)
 from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter(prefix="/companion", tags=["companion"])
@@ -39,6 +54,41 @@ async def mood(current_user: CurrentUser, db: DbSession, background_tasks: Backg
     # while the richer Ollama narration is generated + cached after the response.
     return MoodState.model_validate(
         await mood_service.get_mood(db, current_user.id, background=background_tasks, local_hour=hour))
+
+
+@router.get("/home-stats", response_model=HomeStats, summary="Home Memory Strip — days/goals/saved/people")
+async def home_stats(current_user: CurrentUser, db: DbSession) -> HomeStats:
+    return HomeStats.model_validate(await home_stats_service.build(db, current_user))
+
+
+@router.get("/home-thought", response_model=HomeThought, summary="Advary's contextual thought for the Home hero")
+async def home_thought(current_user: CurrentUser, db: DbSession) -> HomeThought:
+    return HomeThought.model_validate(await home_thought_service.build(db, current_user.id))
+
+
+@router.get("/home-cards", response_model=HomeCards, summary="Living Quick Cards — Story/Future/People/Focus previews")
+async def home_cards(current_user: CurrentUser, db: DbSession) -> HomeCards:
+    return HomeCards.model_validate(await home_cards_service.build(db, current_user.id))
+
+
+@router.get("/date-reaction", response_model=DateReaction, summary="Advary's reaction to a tapped calendar date")
+async def date_reaction(current_user: CurrentUser, db: DbSession, day: date = Query(alias="date")) -> DateReaction:
+    return DateReaction.model_validate(await date_reaction_service.build(db, current_user.id, day))
+
+
+@router.get("/evolution", response_model=EvolutionView, summary="Advary's reflection on the user's journey (Sprint 8)")
+async def evolution(current_user: CurrentUser, db: DbSession) -> EvolutionView:
+    return EvolutionView.model_validate(await companion_evolution_service.evolution(db, current_user))
+
+
+@router.get("/monthly-reflection", response_model=MonthlyReflection, summary="A deterministic month-in-review")
+async def monthly_reflection(
+    current_user: CurrentUser, db: DbSession,
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+) -> MonthlyReflection:
+    return MonthlyReflection.model_validate(
+        await companion_evolution_service.monthly_reflection(db, current_user.id, year, month))
 
 
 @router.get("/tour", response_model=TourOut, summary="The first-launch guided tour")

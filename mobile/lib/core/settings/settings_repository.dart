@@ -13,7 +13,10 @@ class UserSettings {
     this.timezone,
     this.companionStyle = 'balanced',
     this.voiceLength = 'normal',
+    this.selectedVoice,
+    this.voiceLocale,
     this.companionName,
+    this.displayName,
     this.notificationPreferences = const {},
   });
 
@@ -23,7 +26,10 @@ class UserSettings {
         timezone: j['timezone']?.toString(),
         companionStyle: (j['companion_style'] ?? 'balanced').toString(),
         voiceLength: (j['voice_length'] ?? 'normal').toString(),
+        selectedVoice: j['selected_voice']?.toString(),
+        voiceLocale: j['voice_locale']?.toString(),
         companionName: j['companion_name']?.toString(),
+        displayName: j['display_name']?.toString(),
         notificationPreferences: ((j['notification_preferences'] as Map?) ?? const {})
             .map((k, v) => MapEntry(k.toString(), v == true)),
       );
@@ -33,7 +39,10 @@ class UserSettings {
   final String? timezone;
   final String companionStyle;
   final String voiceLength;
+  final String? selectedVoice;
+  final String? voiceLocale;
   final String? companionName;
+  final String? displayName;
   final Map<String, bool> notificationPreferences;
 }
 
@@ -118,10 +127,32 @@ class SettingsRepository {
     }
   }
 
+  /// Choose the device TTS voice Advary speaks with (Voice Studio). Pass null to
+  /// clear and fall back to the system default.
+  Future<UserSettings> setSelectedVoice(String? name, String? locale) async {
+    try {
+      final res = await _dio.patch<dynamic>('/users/me/settings',
+          data: {'selected_voice': name ?? '', 'voice_locale': locale});
+      return UserSettings.fromJson((res.data as Map).cast<String, dynamic>());
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
   /// Set (or clear with '') the companion's name (Sprint 6c).
   Future<UserSettings> setCompanionName(String name) async {
     try {
       final res = await _dio.patch<dynamic>('/users/me/settings', data: {'companion_name': name});
+      return UserSettings.fromJson((res.data as Map).cast<String, dynamic>());
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  /// What the user wants to be called (asked in onboarding; shown instead of email).
+  Future<UserSettings> setDisplayName(String name) async {
+    try {
+      final res = await _dio.patch<dynamic>('/users/me/settings', data: {'display_name': name});
       return UserSettings.fromJson((res.data as Map).cast<String, dynamic>());
     } on DioException catch (e) {
       throw mapDioError(e);

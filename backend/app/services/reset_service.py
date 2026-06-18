@@ -23,6 +23,7 @@ from app.models import (
     CompanionInsight,
     DailyPlan,
     Expense,
+    FinancialProfile,
     Income,
     IncomeSource,
     LifeEvent,
@@ -75,18 +76,23 @@ async def full_reset(db: AsyncSession, user_id: uuid.UUID) -> None:
     s = await db.scalar(select(UserSettings).where(UserSettings.user_id == user_id))
     if s is not None:  # keep base_currency/timezone (operational) — reset the rest
         s.companion_name = None
+        s.display_name = None
         s.companion_style = "balanced"
         s.voice_length = "normal"
+        s.selected_voice = None
+        s.voice_locale = None
         s.notification_preferences = {}
         s.monthly_threshold = None
         s.monthly_income_estimate = None
         s.tour_completed_at = None        # a fresh identity replays the tour
+    await db.execute(delete(FinancialProfile).where(FinancialProfile.user_id == user_id))
     await db.commit()
 
 
 async def demo_seed(db: AsyncSession, user_id: uuid.UUID, *, today: date | None = None) -> None:
     """Wipe, then populate a fictional sample (neutral names — not the owner's data)."""
     await _wipe(db, user_id)
+    await db.execute(delete(FinancialProfile).where(FinancialProfile.user_id == user_id))
     today = today or await calendar_service.user_today(db, user_id)
     cur = (await settings_service.get_settings(db, user_id)).base_currency
 

@@ -18,6 +18,7 @@ class ChatContext(BaseModel):
     period_from: date | None = None
     period_to: date | None = None
     last_explain_ref: str | None = None  # so "why did you say that?" can re-explain
+    pending_profile_text: str | None = None  # life-change awaiting "yes" to apply (Phase 5)
 
 
 class ChatOption(BaseModel):

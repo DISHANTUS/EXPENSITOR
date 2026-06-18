@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import 'device_voices.dart';
 import 'voice_plan.dart';
 
 /// The companion's speaking state (drives the mic toggle + speaking animation).
@@ -40,6 +41,29 @@ class FlutterTtsEngine implements TtsEngine {
 
   @override
   Future<void> stop() => _tts.stop();
+
+  /// Device-voice picker (Voice Studio). Not on the TtsEngine interface so test
+  /// fakes stay tiny — Voice Studio type-checks for this concrete engine.
+  Future<List<DeviceVoice>> listVoices() async {
+    final raw = await _tts.getVoices;
+    if (raw is! List) return const [];
+    final out = <DeviceVoice>[];
+    for (final v in raw) {
+      if (v is Map) {
+        final name = (v['name'] ?? '').toString();
+        if (name.isEmpty) continue;
+        out.add(DeviceVoice(name: name, locale: (v['locale'] ?? '').toString()));
+      }
+    }
+    return out;
+  }
+
+  /// Make every subsequent utterance use this device voice (or the system
+  /// default when null). flutter_tts retains it across speak() calls.
+  Future<void> useVoice(DeviceVoice? voice) async {
+    if (voice == null) return;
+    await _tts.setVoice({'name': voice.name, 'locale': voice.locale});
+  }
 
   @override
   set onComplete(void Function()? cb) => _tts.setCompletionHandler(cb ?? () {});

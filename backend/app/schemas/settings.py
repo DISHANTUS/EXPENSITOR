@@ -39,7 +39,10 @@ class UserSettingsRead(BaseModel):
     preferred_ai_tone: AiTone
     companion_style: str = "balanced"
     voice_length: str = "normal"
+    selected_voice: str | None = None
+    voice_locale: str | None = None
     companion_name: str | None = None
+    display_name: str | None = None
     notification_preferences: NotificationPreferences
     currency_history: list[dict] | None = None
 
@@ -58,16 +61,19 @@ class UserSettingsUpdate(BaseModel):
     preferred_ai_tone: AiTone | None = None
     companion_style: str | None = Field(default=None, max_length=20)
     voice_length: str | None = Field(default=None, max_length=10)
+    selected_voice: str | None = Field(default=None, max_length=120)
+    voice_locale: str | None = Field(default=None, max_length=20)
     companion_name: str | None = Field(default=None, max_length=40)
+    display_name: str | None = Field(default=None, max_length=60)
     notification_preferences: NotificationPreferences | None = None
 
-    @field_validator("companion_name")
+    @field_validator("companion_name", "display_name", "selected_voice")
     @classmethod
     def _clean_name(cls, value: str | None) -> str | None:
         if value is None:
             return None
         v = value.strip()
-        return v or None        # empty string clears the name
+        return v or None        # empty string clears the value
 
     @field_validator("companion_style")
     @classmethod

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/companion/companion_mood.dart';
 import '../../core/companion/companion_scaffold.dart';
+import '../../core/companion/widgets/glow_rail.dart';
 import '../../core/relationships/relationship_models.dart';
 import '../../core/relationships/relationship_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -29,7 +30,7 @@ class RelationshipDetailScreen extends ConsumerWidget {
           child: FilledButton.tonal(
               onPressed: () => ref.invalidate(relationshipDetailProvider(name)), child: const Text('Retry'))),
         data: (r) => ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
           children: [
             _Hero(r: r).animate().fadeIn(duration: 350.ms).slideY(begin: .1, end: 0),
             if (r.memories.isNotEmpty) ...[
@@ -37,20 +38,22 @@ class RelationshipDetailScreen extends ConsumerWidget {
               GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 for (final m in r.memories)
                   Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text('💭  $m')),
-              ])),
+              ])).animate(delay: 120.ms).fadeIn(duration: 350.ms),
             ],
             if (r.timeline.isNotEmpty) ...[
               const _Title('Timeline'),
-              for (final e in r.timeline) _Line(e: e),
+              for (var i = 0; i < r.timeline.length; i++)
+                _RailLine(e: r.timeline[i], index: i, last: i == r.timeline.length - 1),
             ],
             if (r.future.isNotEmpty) ...[
               const _Title('Coming up'),
-              for (final e in r.future) _Line(e: e),
+              for (var i = 0; i < r.future.length; i++)
+                _RailLine(e: r.future[i], index: i, last: i == r.future.length - 1),
             ],
             // Money — only if there's any, and never in the hero.
             if (r.trust != null) ...[
               const _Title('Money between you'),
-              _TrustCard(trust: r.trust!, note: r.trustNote),
+              _TrustCard(trust: r.trust!, note: r.trustNote).animate(delay: 120.ms).fadeIn(duration: 350.ms),
             ],
           ],
         ),
@@ -138,32 +141,50 @@ class _Title extends StatelessWidget {
       );
 }
 
-class _Line extends StatelessWidget {
-  const _Line({required this.e});
+/// One shared moment on the person's glowing rail.
+class _RailLine extends StatelessWidget {
+  const _RailLine({required this.e, required this.index, required this.last});
   final TimelineEntry e;
+  final int index;
+  final bool last;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+    final color = colorForKind(e.kind);
+
+    final card = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: e.isFuture ? 0.03 : 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: e.isFuture ? 0.12 : 0.08)),
+      ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: 34, height: 34, alignment: Alignment.center,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.06),
-              boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.4), blurRadius: 12)]),
-          child: Text(e.icon, style: const TextStyle(fontSize: 17)),
-        ),
-        const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(e.title, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-          if (e.date != null) Text(e.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+          if (e.date != null)
+            Padding(padding: const EdgeInsets.only(top: 3),
+                child: Text(e.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant))),
         ])),
         if (e.isFuture)
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(10)),
-              child: Text('Ahead', style: tt.labelSmall)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(10)),
+            child: Text('Ahead', style: tt.labelSmall),
+          ),
       ]),
     );
+
+    return JourneyRow(
+      emoji: e.icon,
+      color: color,
+      dim: e.isFuture,
+      last: last,
+      nodeSize: 34,
+      child: card,
+    ).animate(delay: (index.clamp(0, 10) * 50).ms).fadeIn(duration: 320.ms).slideX(begin: 0.05, end: 0);
   }
 }

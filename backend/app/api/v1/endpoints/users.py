@@ -5,9 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUser, DbSession, is_developer
+from app.schemas.financial_profile import FinancialProfileRead, FinancialProfileUpdate
 from app.schemas.settings import UserSettingsRead, UserSettingsUpdate
 from app.schemas.user import UserRead
-from app.services import settings_service
+from app.services import profile_service, settings_service
 from app.services.exceptions import FieldNotNullableError, UnsupportedCurrencyError
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -49,3 +50,17 @@ async def update_my_settings(
             detail=f"Field '{exc.field}' cannot be null",
         ) from exc
     return UserSettingsRead.model_validate(row)
+
+
+@router.get("/me/profile", response_model=FinancialProfileRead, summary="Get the financial profile")
+async def read_my_profile(current_user: CurrentUser, db: DbSession) -> FinancialProfileRead:
+    row = await profile_service.get_profile(db, current_user.id)
+    return FinancialProfileRead.model_validate(row)
+
+
+@router.patch("/me/profile", response_model=FinancialProfileRead, summary="Update the financial profile")
+async def update_my_profile(
+    data: FinancialProfileUpdate, current_user: CurrentUser, db: DbSession
+) -> FinancialProfileRead:
+    row = await profile_service.update_profile(db, current_user.id, data)
+    return FinancialProfileRead.model_validate(row)

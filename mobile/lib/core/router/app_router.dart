@@ -8,15 +8,18 @@ import '../voice/voice_service.dart';
 import '../../features/advisor/chat_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/budget_setup/budget_setup_screen.dart';
+import '../../features/budget_setup/plan_screen.dart';
+import '../../features/budget_setup/profile_summary_screen.dart';
+import '../../features/feedback/feedback_screen.dart';
 import '../../features/contact/contact_screen.dart';
 import '../../features/convert/currency_center_screen.dart';
 import '../../features/date_details/date_details_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/journey/journey_screen.dart';
 import '../../features/ledger/add_event_screen.dart';
 import '../../features/ledger/add_expense_screen.dart';
 import '../../features/ledger/add_income_screen.dart';
 import '../../features/ledger/add_lent_screen.dart';
-import '../../features/placeholders/placeholder_screen.dart';
 import '../../features/plan_today/plan_today_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/future_me/future_me_screen.dart';
@@ -24,6 +27,7 @@ import '../../features/relationships/relationship_detail_screen.dart';
 import '../../features/relationships/relationships_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/timeline/timeline_screen.dart';
+import '../../features/voice_studio/voice_studio_screen.dart';
 
 DateTime _parseDate(GoRouterState state) =>
     DateTime.tryParse(state.pathParameters['date'] ?? '') ?? DateTime.now();
@@ -48,22 +52,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/plan-today', builder: (_, __) => const PlanTodayScreen()),
       GoRoute(path: '/contact', builder: (_, __) => const ContactScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/voice-studio', builder: (_, __) => const VoiceStudioScreen()),
       GoRoute(path: '/convert', builder: (_, __) => const CurrencyCenterScreen()),
       GoRoute(path: '/budget-setup', builder: (_, __) => const BudgetSetupScreen()),
+      GoRoute(path: '/plan', builder: (_, __) => const PlanScreen()),
+      GoRoute(path: '/profile-summary', builder: (_, __) => const ProfileSummaryScreen()),
       GoRoute(path: '/advisor', builder: (_, __) => const ChatScreen()),
       GoRoute(path: '/timeline', builder: (_, __) => const TimelineScreen()),
       GoRoute(path: '/future-me', builder: (_, __) => const FutureMeScreen()),
       GoRoute(path: '/relationships', builder: (_, __) => const RelationshipsScreen()),
+      GoRoute(path: '/journey', builder: (_, __) => const JourneyScreen()),
       GoRoute(path: '/relationship/:name',
           builder: (_, state) => RelationshipDetailScreen(name: state.pathParameters['name'] ?? '')),
-      GoRoute(
-        path: '/feedback',
-        builder: (_, __) => const PlaceholderScreen(
-          title: 'Feedback',
-          icon: Icons.feedback_outlined,
-          message: 'Send-feedback arrives in Sprint 4.',
-        ),
-      ),
+      GoRoute(path: '/feedback', builder: (_, __) => const FeedbackScreen()),
       GoRoute(
         path: '/date/:date',
         builder: (_, state) => DateDetailsScreen(date: _parseDate(state)),

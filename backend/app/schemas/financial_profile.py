@@ -11,6 +11,7 @@ from app.models.enums import (
     FoodSituation,
     LifeStage,
     LivingSituation,
+    OptimizationStyle,
     TransportMode,
     TuitionResponsibility,
 )
@@ -39,6 +40,7 @@ class FinancialProfileRead(BaseModel):
     tuition_responsibility: TuitionResponsibility | None = None
     rent_monthly: Decimal | None = None
     lifestyle_monthly: Decimal | None = None
+    optimization_style: OptimizationStyle = OptimizationStyle.balanced
 
 
 class FinancialProfileUpdate(BaseModel):
@@ -64,6 +66,7 @@ class FinancialProfileUpdate(BaseModel):
     tuition_responsibility: TuitionResponsibility | None = None
     rent_monthly: Money | None = None
     lifestyle_monthly: Money | None = None
+    optimization_style: OptimizationStyle | None = None
 
     @field_validator("current_country", "future_country")
     @classmethod

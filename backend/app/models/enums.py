@@ -16,6 +16,11 @@ class IncomeSourceType(str, enum.Enum):
     business = "business"
     gift = "gift"
     refund = "refund"
+    # Budget Intelligence System — multi-income support (sources matter, not just total).
+    scholarship = "scholarship"
+    part_time = "part_time"
+    family_support = "family_support"
+    pension = "pension"
     other = "other"
 
 
@@ -332,3 +337,23 @@ class TuitionResponsibility(str, enum.Enum):
     self_paid = "self_paid"
     none = "none"
     scholarship_covered = "scholarship_covered"
+
+
+class OptimizationStyle(str, enum.Enum):
+    """What Advary optimizes the plan for — two identical budgets can want very
+    different plans."""
+
+    max_savings = "max_savings"
+    balanced = "balanced"
+    comfort_first = "comfort_first"
+    aggressive_goal = "aggressive_goal"
+
+
+class ExpenseBucket(str, enum.Enum):
+    """Every planned outflow belongs to exactly one bucket. Cut priority when a
+    goal doesn't fit: ADJUSTABLE → GOAL → COMMITTED → PROTECTED (food is last)."""
+
+    protected = "protected"     # food, groceries, essential transport, medicine, utilities
+    committed = "committed"     # rent, tuition, insurance, loans/EMI
+    adjustable = "adjustable"   # eating out, entertainment, shopping, subscriptions
+    goal = "goal"               # savings / emergency / laptop / travel funds

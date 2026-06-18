@@ -107,3 +107,21 @@ async def test_update_rejects_unknown_field(client: AsyncClient):
 async def test_settings_requires_auth(client: AsyncClient):
     resp = await client.get(SETTINGS)
     assert resp.status_code == 401
+
+
+async def test_selected_voice_round_trip_and_clear(client: AsyncClient):
+    headers = await _auth_headers(client, email="voice@example.com")
+    # Default: no chosen voice.
+    body = (await client.get(SETTINGS, headers=headers)).json()
+    assert body["selected_voice"] is None and body["voice_locale"] is None
+
+    # Choose a device voice.
+    resp = await client.patch(SETTINGS, headers=headers,
+                              json={"selected_voice": "en-us-x-sfg#female_1-local", "voice_locale": "en-US"})
+    assert resp.status_code == 200
+    assert resp.json()["selected_voice"] == "en-us-x-sfg#female_1-local"
+    assert resp.json()["voice_locale"] == "en-US"
+
+    # Clearing with an empty string falls back to the system default.
+    resp = await client.patch(SETTINGS, headers=headers, json={"selected_voice": "", "voice_locale": None})
+    assert resp.json()["selected_voice"] is None

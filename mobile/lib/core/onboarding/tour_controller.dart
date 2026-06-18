@@ -88,7 +88,14 @@ class TourController extends Notifier<TourState> {
 
   void skip() => _dismiss();
 
-  void finish() => _dismiss();
+  /// Completing the tour pushes the user straight into Budget Setup — "let's get
+  /// to know you so I can build a realistic plan."
+  void finish() {
+    _dismiss();
+    try {
+      ref.read(routerProvider).go('/budget-setup');
+    } catch (_) {/* router not ready */}
+  }
 
   /// Navigate to the current step's screen. Narration is handled by the overlay
   /// widget (which can read the autoDispose voice settings safely).

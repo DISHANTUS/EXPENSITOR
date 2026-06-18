@@ -3,7 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
+import '../companion/companion_orb.dart';
 import '../settings/settings_repository.dart';
+
+/// A small, alive line under the companion name. Uses the user's chosen name
+/// (never their email) when they've told us one.
+String _greeting(int hour, String? name) {
+  final part = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
+  return name == null || name.isEmpty ? 'your personal companion' : '$part, $name.';
+}
 
 class _Dest {
   const _Dest(this.label, this.icon, this.route);
@@ -15,10 +23,12 @@ class _Dest {
 const _destinations = <_Dest>[
   _Dest('Home', Icons.calendar_month, '/home'),
   _Dest('Budget Setup', Icons.account_balance_wallet_outlined, '/budget-setup'),
+  _Dest('Your Plan', Icons.insights_outlined, '/plan'),
   _Dest('Plan Today', Icons.today_outlined, '/plan-today'),
   _Dest('Timeline', Icons.timeline, '/timeline'),
   _Dest('Future Me', Icons.auto_graph, '/future-me'),
   _Dest('People', Icons.people_outline, '/relationships'),
+  _Dest('Your Journey', Icons.auto_awesome_outlined, '/journey'),
   _Dest('Chat With Advisor', Icons.chat_bubble_outline, '/advisor'),
   _Dest('Currency Converter', Icons.currency_exchange, '/convert'),
   _Dest('Settings', Icons.settings_outlined, '/settings'),
@@ -35,8 +45,9 @@ class AppDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final current = GoRouterState.of(context).matchedLocation;
-    final email = ref.watch(authControllerProvider).user?.email;
-    final companion = ref.watch(userSettingsProvider).valueOrNull?.companionName;
+    final settings = ref.watch(userSettingsProvider).valueOrNull;
+    final companion = (settings?.companionName?.isNotEmpty ?? false) ? settings!.companionName! : 'Advary';
+    final name = settings?.displayName;
 
     return Drawer(
       child: SafeArea(
@@ -48,13 +59,11 @@ class AppDrawer extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text('🙂', style: TextStyle(fontSize: 32)),
-                  const SizedBox(height: 8),
-                  Text((companion == null || companion.isEmpty) ? 'Advary' : companion,
-                      style: Theme.of(context).textTheme.titleLarge),
-                  Text('your companion', style: Theme.of(context).textTheme.labelSmall),
-                  if (email != null)
-                    Text(email, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+                  const CompanionOrb(state: OrbState.idle, size: 40),
+                  const SizedBox(height: 6),
+                  Text(companion, style: Theme.of(context).textTheme.titleLarge),
+                  Text(_greeting(DateTime.now().hour, name),
+                      style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             ),

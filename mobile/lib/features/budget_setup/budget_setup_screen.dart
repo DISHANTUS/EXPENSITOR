@@ -1,26 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/companion_mood.dart';
 import '../../core/companion/companion_scaffold.dart';
-import '../../core/format/money.dart';
 import '../../core/settings/settings_repository.dart';
 import '../../core/widgets/otherable_chips.dart';
-import '../calendar/calendar_repository.dart';
-import '../home/dashboard_repository.dart';
-import '../settings/settings_screen.dart';
 import 'budget_repository.dart';
-import 'budget_setup_models.dart';
 
-const _draftKey = 'budget_setup_draft';
-
-// Steps (step 2 = family detail, skipped unless income source is Family support).
-const _intro = 0, _source = 1, _family = 2, _income = 3, _commitments = 4, _goals = 5, _review = 6;
-
+/// Profile-Discovery Wizard (Budget Intelligence System — Phase 5C).
+///
+/// Profile-first onboarding: get to know the person (country → life stage →
+/// living → food → transport → scholarship/part-time → income → daily living →
+/// goal → how to optimise) BEFORE doing money math, then land on the Plan screen.
+/// Every step explains why it matters, supports Back/Skip, and every "Other"
+/// opens a text field. Nothing is ever locked — it's all editable later via Advary.
 class BudgetSetupScreen extends ConsumerStatefulWidget {
   const BudgetSetupScreen({super.key});
 
@@ -28,121 +25,232 @@ class BudgetSetupScreen extends ConsumerStatefulWidget {
   ConsumerState<BudgetSetupScreen> createState() => _BudgetSetupScreenState();
 }
 
+// label → stored value maps.
+const _countries = {'India': 'IN', 'Japan': 'JP', 'United States': 'US', 'United Kingdom': 'GB'};
+const _lifeStages = {
+  'School / High School': 'high_school', 'UG Student': 'ug_student', 'PG / Master’s': 'pg_student',
+  'Scholarship Student': 'scholarship_student', 'Working Professional': 'working_professional',
+  'Self-employed': 'self_employed', 'Business Owner': 'business_owner',
+};
+const _living = {'Parents': 'with_parents', 'Partner': 'with_partner', 'Friends': 'with_friends',
+  'Alone': 'alone', 'Dormitory': 'dormitory'};
+const _food = {'Mostly at home': 'home_cooked', 'A mix of both': 'mix', 'Mostly outside': 'mostly_outside'};
+const _transport = {'Walk': 'walk', 'Bicycle': 'bicycle', 'Bus': 'bus', 'Train': 'train', 'Mixed': 'mixed'};
+const _incomeSources = {'Salary': 'salary', 'Business': 'business', 'Freelance': 'freelance',
+  'Scholarship': 'scholarship', 'Part-time': 'part_time', 'Family support': 'family_support'};
+const _optimize = {'Maximum savings': 'max_savings', 'Balanced life': 'balanced',
+  'Comfort first': 'comfort_first', 'Chase my goal': 'aggressive_goal'};
+
+class _Draft {
+  String? country, otherCountry, lifeStage, lifeStageNote, living, livingNote, food, transportMode, optimize;
+  String foodAmount = '', transportAmount = '', incomeAmount = '', lifestyleAmount = '', rentAmount = '';
+  String goalName = '', goalAmount = '';
+  String? incomeSource;
+  bool scholarship = false, partTime = false;
+  String scholarshipAmount = '', partTimeAmount = '';
+}
+
 class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
-  final _storage = const FlutterSecureStorage();
-  BudgetDraft _d = BudgetDraft();
-  bool _loading = true;
-  bool _resumeOffer = false;
+  final _d = _Draft();
+  int _i = 0;
   bool _busy = false;
-  BudgetSummary? _result;
+
+  bool get _isStudent =>
+      {'high_school', 'ug_student', 'pg_student', 'scholarship_student'}.contains(_d.lifeStage);
+  bool get _needsRent => _d.living != null && _d.living != 'with_parents' && _d.living != 'dormitory';
+
+  List<String> get _steps => [
+        'intro', 'country', 'life', 'living', 'foodHabit', 'foodAmount', 'transport', 'transportAmt',
+        if (_isStudent) 'scholarship',
+        if (_isStudent) 'partTime',
+        'income', 'lifestyle',
+        if (_needsRent) 'rent',
+        'goal', 'optimize', 'done',
+      ];
+
+  String get _step => _steps[_i.clamp(0, _steps.length - 1)];
+
+  void _next() => setState(() => _i = (_i + 1).clamp(0, _steps.length - 1));
+  void _back() => setState(() => _i = (_i - 1).clamp(0, _steps.length - 1));
+
+  String _why() => switch (_step) {
+        'intro' => 'Let’s get to know you first, so the plan actually fits your life — not a generic template.',
+        'country' => 'Where do you live? It sets local cost baselines and your currency context.',
+        'life' => 'Your life stage changes everything — a student isn’t budgeted like a business owner.',
+        'living' => 'Who you live with shapes rent and food more than almost anything else.',
+        'foodHabit' => 'Food is usually the biggest everyday cost — how do you mostly eat?',
+        'foodAmount' => 'Roughly what you spend on food, so I can protect it as an essential.',
+        'transport' => 'How you get around tells me what’s essential vs. flexible.',
+        'transportAmt' => 'Your typical monthly transport cost.',
+        'scholarship' => 'Scholarships count as income — it helps me size your real budget.',
+        'partTime' => 'Part-time work is income too. A few hours can change the whole plan.',
+        'income' => 'Now the money. What comes in each month — this drives daily limits, buffers and goals.',
+        'lifestyle' => 'Fun matters too — games, eating out, shopping. I keep room for it.',
+        'rent' => 'Your monthly rent — a protected housing cost.',
+        'goal' => 'Saving toward something? Name it and a monthly amount (you can skip this).',
+        'optimize' => 'Last one — how should I optimise your plan?',
+        _ => 'All set — let me build your plan.',
+      };
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  Widget build(BuildContext context) {
+    return CompanionScaffold(
+      title: 'Get to know you',
+      commentary: _why(),
+      mood: CompanionMood.neutral,
+      child: AbsorbPointer(absorbing: _busy, child: _body()),
+    );
   }
 
-  Future<void> _load() async {
-    final saved = await _storage.read(key: _draftKey);
-    if (saved != null) {
-      try {
-        _d = BudgetDraft.decode(saved);
-        _resumeOffer = true;
-      } catch (_) {
-        _d = BudgetDraft();
-      }
-    }
-    if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _persist() async => _storage.write(key: _draftKey, value: _d.encode());
-  Future<void> _clearDraft() async => _storage.delete(key: _draftKey);
-
-  void _go(int step) {
-    setState(() => _d.step = step);
-    _persist();
-  }
-
-  void _next() {
-    var s = _d.step;
-    s = s + 1;
-    if (s == _family && _d.incomeSource != 'Family support') s++; // skip family detail
-    _go(s);
-  }
-
-  void _back() {
-    var s = _d.step - 1;
-    if (s == _family && _d.incomeSource != 'Family support') s--;
-    if (s < _intro) s = _intro;
-    _go(s);
-  }
-
-  String _commentary() {
-    switch (_d.step) {
-      case _intro:
-        return "Let's understand your financial life a little — it helps me give advice that fits you.";
-      case _source:
-        return 'Where does most of your money come from?';
-      case _family:
-        return 'Who usually helps you out?';
-      case _income:
-        return 'Roughly how much comes in each month?';
-      case _commitments:
-        return 'Anything that regularly takes money each month? Add what applies.';
-      case _goals:
-        return 'Saving toward anything? You can skip this for now.';
+  Widget _body() {
+    final cur = ref.watch(userSettingsProvider).valueOrNull?.baseCurrency ?? 'INR';
+    switch (_step) {
+      case 'intro':
+        return _pad([
+          const Text('A few quick questions — no spreadsheets, I promise. You can change any answer later just by telling me.'),
+          const SizedBox(height: 20),
+          FilledButton(onPressed: _next, child: const Text("Let's start")),
+        ]);
+      case 'country':
+        return _choice(_countries.keys.toList(),
+            current: _countries.entries.where((e) => e.value == _d.country).map((e) => e.key).firstOrNull ?? _d.otherCountry,
+            onPick: (label, custom) => setState(() {
+              if (custom) { _d.country = null; _d.otherCountry = label; }
+              else { _d.country = _countries[label]; _d.otherCountry = null; }
+            }),
+            enabled: _d.country != null || (_d.otherCountry ?? '').isNotEmpty);
+      case 'life':
+        return _choice(_lifeStages.keys.toList(),
+            current: _lifeStages.entries.where((e) => e.value == _d.lifeStage).map((e) => e.key).firstOrNull ?? _d.lifeStageNote,
+            onPick: (label, custom) => setState(() {
+              if (custom) { _d.lifeStage = 'other'; _d.lifeStageNote = label; }
+              else { _d.lifeStage = _lifeStages[label]; _d.lifeStageNote = null; }
+            }),
+            enabled: _d.lifeStage != null);
+      case 'living':
+        return _choice(_living.keys.toList(),
+            current: _living.entries.where((e) => e.value == _d.living).map((e) => e.key).firstOrNull ?? _d.livingNote,
+            onPick: (label, custom) => setState(() {
+              if (custom) { _d.living = 'other'; _d.livingNote = label; }
+              else { _d.living = _living[label]; _d.livingNote = null; }
+            }),
+            enabled: _d.living != null);
+      case 'foodHabit':
+        return _choice(_food.keys.toList(),
+            current: _food.entries.where((e) => e.value == _d.food).map((e) => e.key).firstOrNull,
+            onPick: (label, _) => setState(() => _d.food = _food[label]),
+            enabled: _d.food != null, allowOther: false);
+      case 'foodAmount':
+        final daily = _d.food != 'home_cooked';
+        return _amount(daily ? 'Food per day ($cur)' : 'Groceries per month ($cur)',
+            _d.foodAmount, (v) => _d.foodAmount = v);
+      case 'transport':
+        return _choice(_transport.keys.toList(),
+            current: _transport.entries.where((e) => e.value == _d.transportMode).map((e) => e.key).firstOrNull,
+            onPick: (label, _) => setState(() => _d.transportMode = _transport[label]),
+            enabled: _d.transportMode != null, allowOther: false);
+      case 'transportAmt':
+        return _amount('Transport per month ($cur)', _d.transportAmount, (v) => _d.transportAmount = v, optional: true);
+      case 'scholarship':
+        return _yesNo(_d.scholarship, (v) => setState(() => _d.scholarship = v),
+            amountLabel: 'Scholarship per month ($cur)', amount: _d.scholarshipAmount,
+            onAmount: (v) => _d.scholarshipAmount = v);
+      case 'partTime':
+        return _yesNo(_d.partTime, (v) => setState(() => _d.partTime = v),
+            amountLabel: 'Part-time income per month ($cur)', amount: _d.partTimeAmount,
+            onAmount: (v) => _d.partTimeAmount = v);
+      case 'income':
+        return _pad([
+          _moneyField('Monthly income ($cur)', _d.incomeAmount, (v) => setState(() => _d.incomeAmount = v)),
+          const SizedBox(height: 16),
+          const Text('Where does most of it come from?'),
+          const SizedBox(height: 8),
+          OtherableChips(
+            options: _incomeSources.keys.toList(),
+            initialValue: _incomeSources.entries.where((e) => e.value == _d.incomeSource).map((e) => e.key).firstOrNull,
+            onChanged: (v, custom) => setState(() => _d.incomeSource = custom ? 'other' : _incomeSources[v]),
+          ),
+          const SizedBox(height: 20),
+          _nav(enabled: double.tryParse(_d.incomeAmount.trim()) != null),
+        ]);
+      case 'lifestyle':
+        return _amount('Fun & lifestyle per month ($cur)', _d.lifestyleAmount,
+            (v) => _d.lifestyleAmount = v, optional: true);
+      case 'rent':
+        return _amount('Rent per month ($cur)', _d.rentAmount, (v) => _d.rentAmount = v, optional: true);
+      case 'goal':
+        return _pad([
+          _moneyField('Goal name (e.g. Japan fund)', _d.goalName, (v) => setState(() => _d.goalName = v), number: false),
+          const SizedBox(height: 12),
+          _moneyField('Save per month ($cur)', _d.goalAmount, (v) => setState(() => _d.goalAmount = v)),
+          const SizedBox(height: 20),
+          _nav(enabled: true, skipLabel: 'Skip'),
+        ]);
+      case 'optimize':
+        return _pad([
+          OtherableChips(
+            options: _optimize.keys.toList(),
+            initialValue: _optimize.entries.where((e) => e.value == _d.optimize).map((e) => e.key).firstOrNull,
+            onChanged: (v, _) => setState(() => _d.optimize = _optimize[v]),
+            otherLabel: 'Not sure',
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _finish,
+            child: _busy
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Build my plan'),
+          ),
+        ]);
       default:
-        return "Here's the budget I worked out — and how I got there.";
+        return _pad([const Center(child: CircularProgressIndicator())]);
     }
   }
 
   Future<void> _finish() async {
-    final currency = ref.read(userSettingsProvider).valueOrNull?.baseCurrency;
-    if (currency == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn’t read your base currency. Try again.')));
-      return;
-    }
+    final cur = ref.read(userSettingsProvider).valueOrNull?.baseCurrency ?? 'INR';
     setState(() => _busy = true);
-    final repo = ref.read(budgetRepositoryProvider);
+    final plan = ref.read(budgetPlanRepositoryProvider);
+    final budget = ref.read(budgetRepositoryProvider);
     try {
-      if (_d.incomeSource == 'Family support') {
-        for (final who in _d.familyWho) {
-          await repo.createPerson(name: who, relationshipType: 'family', reason: _d.incomeWhy);
-        }
+      final body = <String, dynamic>{
+        if (_d.country != null) 'current_country': _d.country,
+        if ((_d.otherCountry ?? '').isNotEmpty) 'current_city': _d.otherCountry,
+        if (_d.lifeStage != null) 'life_stage': _d.lifeStage,
+        if ((_d.lifeStageNote ?? '').isNotEmpty) 'life_stage_note': _d.lifeStageNote,
+        if (_d.living != null) 'living_situation': _d.living,
+        if ((_d.livingNote ?? '').isNotEmpty) 'living_note': _d.livingNote,
+        if (_d.food != null) 'food_situation': _d.food,
+        if (_d.optimize != null) 'optimization_style': _d.optimize,
+        if (_d.transportMode != null) 'transport_mode': _d.transportMode,
+      };
+      final foodAmt = _d.foodAmount.trim();
+      if (foodAmt.isNotEmpty) body[_d.food == 'home_cooked' ? 'food_monthly' : 'food_daily'] = foodAmt;
+      if (_d.transportAmount.trim().isNotEmpty) body['transport_monthly'] = _d.transportAmount.trim();
+      if (_needsRent && _d.rentAmount.trim().isNotEmpty) body['rent_monthly'] = _d.rentAmount.trim();
+      if (_d.lifestyleAmount.trim().isNotEmpty) body['lifestyle_monthly'] = _d.lifestyleAmount.trim();
+      await plan.patchProfile(body);
+
+      if (double.tryParse(_d.incomeAmount.trim()) != null) {
+        await budget.createIncomeSource(
+            label: _incomeSources.entries.where((e) => e.value == _d.incomeSource).map((e) => e.key).firstOrNull ?? 'Income',
+            sourceType: _d.incomeSource ?? 'other', amount: _d.incomeAmount.trim(), currency: cur);
       }
-      if (_d.incomeAmount.trim().isNotEmpty) {
-        await repo.createIncomeSource(
-          label: _d.incomeSource ?? 'Income',
-          sourceType: mapIncomeSourceType(_d.incomeSource ?? 'Other'),
-          amount: _d.incomeAmount.trim(),
-          currency: currency,
-          reason: _d.incomeWhy,
-        );
+      if (_d.scholarship && double.tryParse(_d.scholarshipAmount.trim()) != null) {
+        await budget.createIncomeSource(label: 'Scholarship', sourceType: 'scholarship', amount: _d.scholarshipAmount.trim(), currency: cur);
       }
-      for (final c in _d.commitments) {
-        await repo.createRecurringRule(
-          ruleType: mapCommitmentRuleType(c.type),
-          label: c.label,
-          amount: c.amount,
-          currency: currency,
-          recurrenceDay: c.day,
-          startDate: DateTime.now(),
-          reason: c.why,
-        );
+      if (_d.partTime && double.tryParse(_d.partTimeAmount.trim()) != null) {
+        await budget.createIncomeSource(label: 'Part-time job', sourceType: 'part_time', amount: _d.partTimeAmount.trim(), currency: cur);
       }
-      for (final g in _d.goals) {
-        await repo.createSavingsGoal(name: g.name, amount: g.amount, currency: currency, reason: g.why);
+      if (_d.goalName.trim().isNotEmpty && double.tryParse(_d.goalAmount.trim()) != null) {
+        await budget.createSavingsGoal(name: _d.goalName.trim(), amount: _d.goalAmount.trim(), currency: cur);
       }
-      final summary = await repo.apply();
-      await _clearDraft();
+      ref.invalidate(profileProvider);
+      ref.invalidate(realityProvider);
+      ref.invalidate(feasibilityProvider);
+      ref.invalidate(recommendationsProvider);
       if (!mounted) return;
-      ref.invalidate(monthViewProvider);
-      ref.invalidate(dailyBriefProvider);
-      setState(() {
-        _result = summary;
-        _busy = false;
-        _d.step = _review;
-      });
+      context.go('/profile-summary');   // show what Advary learned, then "Create my plan" → /plan
     } on AppError catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -150,357 +258,63 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const CompanionScaffold(title: 'Budget Setup', child: Center(child: CircularProgressIndicator()));
-    }
-    return CompanionScaffold(
-      title: 'Budget Setup',
-      commentary: _commentary(),
-      mood: _d.step == _review ? CompanionMood.happy : CompanionMood.neutral,
-      child: AbsorbPointer(
-        absorbing: _busy,
-        child: _resumeOffer ? _resumeCard() : _stepBody(),
-      ),
-    );
+  // --- shared widgets ---
+  Widget _pad(List<Widget> children) =>
+      ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: children);
+
+  Widget _choice(List<String> options,
+      {required void Function(String, bool) onPick, required bool enabled, String? current,
+      bool allowOther = true, String? skipLabel}) {
+    final chips = allowOther
+        ? OtherableChips(options: options, initialValue: current, onChanged: onPick)
+        : Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final o in options) ChoiceChip(label: Text(o), selected: current == o, onSelected: (_) => onPick(o, false)),
+          ]);
+    return _pad([chips, const SizedBox(height: 20), _nav(enabled: enabled, skipLabel: skipLabel)]);
   }
 
-  Widget _resumeCard() => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Last time we were setting up your financial profile.'),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () => setState(() => _resumeOffer = false),
-                          child: const Text('Continue'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: () {
-                          _clearDraft();
-                          setState(() {
-                            _d = BudgetDraft();
-                            _resumeOffer = false;
-                          });
-                        },
-                        child: const Text('Start over'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
+  Widget _amount(String label, String value, ValueChanged<String> onChanged, {bool optional = false}) =>
+      _pad([
+        _moneyField(label, value, (v) => setState(() => onChanged(v))),
+        const SizedBox(height: 20),
+        _nav(enabled: optional || double.tryParse(value.trim()) != null, skipLabel: optional ? 'Skip' : null),
+      ]);
 
-  Widget _stepBody() {
-    switch (_d.step) {
-      case _intro:
-        final currency = ref.watch(userSettingsProvider).valueOrNull?.baseCurrency ?? 'INR';
-        return _pad([
-          const Text('A few quick questions — no spreadsheets, I promise.'),
-          const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: const Text('Currency you use'),
-              subtitle: const Text('I’ll use this everywhere'),
-              trailing: Text(currency, style: Theme.of(context).textTheme.titleMedium),
-              onTap: () => changePreferredCurrency(context, ref),
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(onPressed: _next, child: const Text("Let's start")),
-        ]);
-      case _source:
-        final sourceSet = _d.incomeSource != null && _d.incomeSource!.isNotEmpty;
-        return _pad([
-          OtherableChips(
-            options: incomeSourceOptions,
-            initialValue: _d.incomeSource,
-            onChanged: (value, _) => setState(() => _d.incomeSource = value),
-          ),
-          const SizedBox(height: 20),
-          _nextRow(enabled: sourceSet),
-        ]);
-      case _family:
-        return _pad([
-          _multiChips(familyWhoOptions, _d.familyWho),
-          const SizedBox(height: 20),
-          _nextRow(enabled: _d.familyWho.isNotEmpty),
-        ]);
-      case _income:
-        return _pad([
-          TextField(
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            decoration: const InputDecoration(labelText: 'Monthly amount'),
-            controller: TextEditingController(text: _d.incomeAmount)
-              ..selection = TextSelection.collapsed(offset: _d.incomeAmount.length),
-            onChanged: (v) => _d.incomeAmount = v,
-          ),
-          const SizedBox(height: 16),
-          const Text('Why does this income matter? (optional)'),
-          const SizedBox(height: 8),
-          OtherableChips(
-            options: incomeWhyOptions,
-            initialValue: _d.incomeWhy,
-            onChanged: (value, _) => setState(() => _d.incomeWhy = value),
-          ),
-          const SizedBox(height: 20),
-          _nextRow(enabled: double.tryParse(_d.incomeAmount.trim()) != null),
-        ]);
-      case _commitments:
-        return _pad([
-          ..._d.commitments.asMap().entries.map((e) => Card(
-                child: ListTile(
-                  title: Text('${e.value.type} · ${e.value.label}'),
-                  subtitle: Text('day ${e.value.day}'),
-                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(e.value.amount),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => setState(() => _d.commitments.removeAt(e.key)),
-                    ),
-                  ]),
-                ),
-              )),
-          OutlinedButton.icon(
-            onPressed: _addCommitment,
-            icon: const Icon(Icons.add),
-            label: const Text('Add a recurring expense'),
-          ),
-          const SizedBox(height: 20),
-          _nextRow(enabled: true, label: 'Next'),
-        ]);
-      case _goals:
-        return _pad([
-          ..._d.goals.asMap().entries.map((e) => Card(
-                child: ListTile(
-                  title: Text(e.value.name),
-                  subtitle: e.value.why != null ? Text(e.value.why!) : null,
-                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(e.value.amount),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => setState(() => _d.goals.removeAt(e.key)),
-                    ),
-                  ]),
-                ),
-              )),
-          OutlinedButton.icon(onPressed: _addGoal, icon: const Icon(Icons.add), label: const Text('Add a savings goal')),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _busy ? null : _finish,
-            child: _busy
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Generate my budget'),
-          ),
-        ]);
-      default:
-        return _reviewBody();
-    }
-  }
-
-  Widget _reviewBody() {
-    final s = _result;
-    if (s == null) return _pad([const Text('Budget ready.')]);
-    Widget row(String label, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [Text(label), Text(formatMoney(value, s.currency), style: const TextStyle(fontWeight: FontWeight.w600))],
-          ),
-        );
+  Widget _yesNo(bool value, ValueChanged<bool> onChanged,
+      {required String amountLabel, required String amount, required ValueChanged<String> onAmount}) {
     return _pad([
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            row('Monthly budget', s.monthlyDiscretionary),
-            row('Weekly budget', s.weekly),
-            row('Daily budget', s.daily),
-          ]),
-        ),
-      ),
-      const SizedBox(height: 16),
-      Text('How I worked this out', style: Theme.of(context).textTheme.titleSmall),
-      const SizedBox(height: 8),
-      Text('Income ${formatMoney(s.monthlyIncome, s.currency)} '
-          '− commitments ${formatMoney(s.monthlyCommitments, s.currency)} '
-          '− savings ${formatMoney(s.monthlyGoals, s.currency)} '
-          '= ${formatMoney(s.monthlyDiscretionary, s.currency)} to spend each month. '
-          'Weekly is that ÷ 4.33; daily is the monthly amount ÷ days in the month. '
-          'Your calendar now uses this as your daily budget.'),
+      Wrap(spacing: 8, children: [
+        ChoiceChip(label: const Text('Yes'), selected: value, onSelected: (_) => onChanged(true)),
+        ChoiceChip(label: const Text('No'), selected: !value, onSelected: (_) => onChanged(false)),
+      ]),
+      if (value) ...[
+        const SizedBox(height: 16),
+        _moneyField(amountLabel, amount, (v) => setState(() => onAmount(v))),
+      ],
       const SizedBox(height: 20),
-      FilledButton(onPressed: () => context.go('/home'), child: const Text('Done')),
+      _nav(enabled: !value || double.tryParse(amount.trim()) != null, skipLabel: 'Skip'),
     ]);
   }
 
-  Future<void> _addCommitment() async {
-    final c = await showDialog<Commitment>(context: context, builder: (_) => const _CommitmentDialog());
-    if (c != null) setState(() => _d.commitments.add(c));
-    _persist();
-  }
-
-  Future<void> _addGoal() async {
-    final g = await showDialog<GoalDraft>(context: context, builder: (_) => const _GoalDialog());
-    if (g != null) setState(() => _d.goals.add(g));
-    _persist();
-  }
-
-  // --- shared bits ---
-  Widget _pad(List<Widget> children) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: children,
+  Widget _moneyField(String label, String value, ValueChanged<String> onChanged, {bool number = true}) => TextField(
+        keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        inputFormatters: number ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
+        decoration: InputDecoration(labelText: label),
+        controller: TextEditingController(text: value)..selection = TextSelection.collapsed(offset: value.length),
+        onChanged: onChanged,
       );
 
-  // Buttons are themed full-width (infinite min-width), so they must be given a
-  // bounded width via Expanded when placed in a Row.
-  Widget _nextRow({required bool enabled, String label = 'Next'}) => Row(
+  Widget _nav({required bool enabled, String? skipLabel}) => Row(
         children: [
-          if (_d.step > _source) ...[
+          if (_i > 0) ...[
             Expanded(child: OutlinedButton(onPressed: _back, child: const Text('Back'))),
             const SizedBox(width: 12),
           ],
-          Expanded(child: FilledButton(onPressed: enabled ? _next : null, child: Text(label))),
+          if (skipLabel != null) ...[
+            Expanded(child: TextButton(onPressed: _next, child: Text(skipLabel))),
+            const SizedBox(width: 12),
+          ],
+          Expanded(child: FilledButton(onPressed: enabled ? _next : null, child: const Text('Next'))),
         ],
       );
-
-  Widget _multiChips(List<String> options, List<String> selected) => Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final o in options)
-            FilterChip(
-              label: Text(o),
-              selected: selected.contains(o),
-              onSelected: (on) => setState(() => on ? selected.add(o) : selected.remove(o)),
-            ),
-        ],
-      );
-}
-
-class _CommitmentDialog extends StatefulWidget {
-  const _CommitmentDialog();
-  @override
-  State<_CommitmentDialog> createState() => _CommitmentDialogState();
-}
-
-class _CommitmentDialogState extends State<_CommitmentDialog> {
-  String _type = commitmentTypeOptions.first;
-  final _label = TextEditingController();
-  final _amount = TextEditingController();
-  final _day = TextEditingController(text: '1');
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Recurring expense'),
-      content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          DropdownButtonFormField<String>(
-            initialValue: _type,
-            decoration: const InputDecoration(labelText: 'Type'),
-            items: [for (final t in commitmentTypeOptions) DropdownMenuItem(value: t, child: Text(t))],
-            onChanged: (v) => setState(() => _type = v ?? _type),
-          ),
-          TextField(controller: _label, decoration: const InputDecoration(labelText: 'Name (e.g. Netflix)')),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            decoration: const InputDecoration(labelText: 'Monthly amount'),
-          ),
-          TextField(
-            controller: _day,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'Day of month (1-31)'),
-          ),
-        ]),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final amt = double.tryParse(_amount.text.trim());
-            final day = int.tryParse(_day.text.trim()) ?? 1;
-            if (amt == null || amt <= 0 || _label.text.trim().isEmpty) return;
-            Navigator.pop(
-              context,
-              Commitment(
-                type: _type,
-                label: _label.text.trim(),
-                amount: _amount.text.trim(),
-                day: day.clamp(1, 31),
-              ),
-            );
-          },
-          child: const Text('Add'),
-        ),
-      ],
-    );
-  }
-}
-
-class _GoalDialog extends StatefulWidget {
-  const _GoalDialog();
-  @override
-  State<_GoalDialog> createState() => _GoalDialogState();
-}
-
-class _GoalDialogState extends State<_GoalDialog> {
-  final _name = TextEditingController();
-  final _amount = TextEditingController();
-  String? _why;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Savings goal'),
-      content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Goal (e.g. Japan fund)')),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            decoration: const InputDecoration(labelText: 'Monthly amount'),
-          ),
-          const SizedBox(height: 12),
-          const Align(alignment: Alignment.centerLeft, child: Text('Why is this important?')),
-          const SizedBox(height: 6),
-          OtherableChips(
-            options: goalWhyOptions,
-            initialValue: _why,
-            onChanged: (value, _) => setState(() => _why = value),
-          ),
-        ]),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final amt = double.tryParse(_amount.text.trim());
-            if (amt == null || amt <= 0 || _name.text.trim().isEmpty) return;
-            Navigator.pop(context, GoalDraft(name: _name.text.trim(), amount: _amount.text.trim(), why: _why));
-          },
-          child: const Text('Add'),
-        ),
-      ],
-    );
-  }
 }

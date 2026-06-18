@@ -80,6 +80,31 @@ async def test_demo_seed_populates_a_fictional_user(client: AsyncClient):
     assert "Sam" in people or "Mia" in people
 
 
+async def test_reset_voice_and_profile_behaviour(client: AsyncClient):
+    """Voice settings + financial profile survive a soft reset (they're identity,
+    not story) and are cleared by a full reset — no orphaned profile left behind."""
+    h = await _auth(client, "advary2006@gmail.com")
+    await client.patch("/api/v1/users/me/settings",
+                       json={"selected_voice": "en-us-x-sfg#female_1-local", "voice_locale": "en-US"}, headers=h)
+    await client.patch("/api/v1/users/me/profile",
+                       json={"life_stage": "pg_student", "current_country": "jp"}, headers=h)
+    await _seed(client, h)
+
+    # Soft: story gone, but the chosen voice and profile remain.
+    await client.post("/api/v1/reset", json={"mode": "soft"}, headers=h)
+    s = (await client.get("/api/v1/users/me/settings", headers=h)).json()
+    assert s["selected_voice"] == "en-us-x-sfg#female_1-local" and s["voice_locale"] == "en-US"
+    p = (await client.get("/api/v1/users/me/profile", headers=h)).json()
+    assert p["life_stage"] == "pg_student" and p["current_country"] == "JP"
+
+    # Full: voice cleared to default, profile wiped (no orphan).
+    await client.post("/api/v1/reset", json={"mode": "full"}, headers=h)
+    s2 = (await client.get("/api/v1/users/me/settings", headers=h)).json()
+    assert s2["selected_voice"] is None and s2["voice_locale"] is None
+    p2 = (await client.get("/api/v1/users/me/profile", headers=h)).json()
+    assert p2["life_stage"] is None and p2["current_country"] is None
+
+
 async def test_reset_forbidden_for_non_developer(client: AsyncClient):
     h = await _auth(client, "normal_user@example.com")     # not a developer
     await _seed(client, h)

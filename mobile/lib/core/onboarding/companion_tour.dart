@@ -50,6 +50,25 @@ class _TourOverlay extends ConsumerStatefulWidget {
 
 class _TourOverlayState extends ConsumerState<_TourOverlay> {
   String? _spokenKey;   // the step we last narrated, so we don't repeat it
+  final _nameCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Save what the user wants to be called (best-effort) then advance.
+  Future<void> _saveNameThenNext() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isNotEmpty) {
+      try {
+        await ref.read(settingsRepositoryProvider).setDisplayName(name);
+        ref.invalidate(userSettingsProvider);
+      } catch (_) {/* don't block onboarding on a failed save */}
+    }
+    if (mounted) ref.read(tourControllerProvider.notifier).next();
+  }
 
   /// Narrate a step aloud only if the user opted into spoken greetings.
   void _maybeNarrate(String key, String spokenText) {
@@ -115,6 +134,30 @@ class _TourOverlayState extends ConsumerState<_TourOverlay> {
                             key: ValueKey(step.key),
                             style: const TextStyle(color: Color(0xF2FFFFFF), fontSize: 15, height: 1.4)),
                       ),
+                      if (step.key == 'welcome') ...[
+                        const SizedBox(height: 14),
+                        const Text('What should I call you?',
+                            style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 13)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _nameCtrl,
+                          style: const TextStyle(color: Colors.white),
+                          cursorColor: const Color(0xFF7C5CFF),
+                          decoration: InputDecoration(
+                            hintText: 'Your name',
+                            hintStyle: const TextStyle(color: Color(0x66FFFFFF)),
+                            isDense: true,
+                            filled: true,
+                            fillColor: Colors.white.withValues(alpha: 0.06),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0x26FFFFFF))),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF7C5CFF))),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -126,7 +169,10 @@ class _TourOverlayState extends ConsumerState<_TourOverlay> {
                               if (!s.isFirst) _TourButton(label: 'Back', onTap: n.back),
                               _TourButton(label: s.isLast ? 'Done' : 'Skip', onTap: n.skip),
                               const SizedBox(width: 4),
-                              _TourButton(label: s.isLast ? "Let's go" : 'Next', onTap: n.next, primary: true),
+                              _TourButton(
+                                  label: s.isLast ? "Let's go" : 'Next',
+                                  onTap: step.key == 'welcome' ? _saveNameThenNext : n.next,
+                                  primary: true),
                             ],
                           ),
                         ],

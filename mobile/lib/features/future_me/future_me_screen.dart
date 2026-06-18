@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/companion/companion_mood.dart';
 import '../../core/companion/companion_scaffold.dart';
+import '../../core/companion/widgets/glow_rail.dart';
 import '../../core/future_me/future_me_models.dart';
 import '../../core/future_me/future_me_repository.dart';
 import '../../core/theme/app_theme.dart';
@@ -32,11 +34,15 @@ class FutureMeScreen extends ConsumerWidget {
         data: (fm) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(futureMeProvider),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
             children: [
               if (fm.paths.isNotEmpty) ...[
                 const _SectionTitle('Where you’re headed'),
-                for (final p in fm.paths) _PathCard(path: p, currency: fm.currency),
+                for (var i = 0; i < fm.paths.length; i++)
+                  _PathCard(path: fm.paths[i], currency: fm.currency)
+                      .animate(delay: (i * 90).ms)
+                      .fadeIn(duration: 380.ms)
+                      .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
               ] else
                 const _Note('I need a bit more history (and some positive savings) before I can project your paths.'),
               if (fm.levers.isNotEmpty) ...[
@@ -45,10 +51,13 @@ class FutureMeScreen extends ConsumerWidget {
                 Wrap(spacing: 8, runSpacing: 8, children: [for (final l in fm.levers) Chip(label: Text(l.label))]),
               ],
               if (fm.milestones.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const _SectionTitle('Milestones ahead'),
+                const SizedBox(height: 18),
+                const _SectionTitle('The journey ahead'),
                 for (var i = 0; i < fm.milestones.length; i++)
-                  _MilestoneRail(m: fm.milestones[i], last: i == fm.milestones.length - 1),
+                  _MilestoneRail(m: fm.milestones[i], last: i == fm.milestones.length - 1)
+                      .animate(delay: (i.clamp(0, 10) * 70).ms)
+                      .fadeIn(duration: 360.ms)
+                      .slideX(begin: 0.06, end: 0, curve: Curves.easeOut),
               ],
             ],
           ),
@@ -123,7 +132,8 @@ class _PathCard extends StatelessWidget {
   }
 }
 
-/// A railed milestone row: `2028 ──🎯 Japan Fund` — the screenshot-worthy view.
+/// A milestone on the glowing journey path: `2028 ──🎯 Japan Fund`. Goal/forecast
+/// milestones glow as highlights; everything ahead reads as luminous and hopeful.
 class _MilestoneRail extends StatelessWidget {
   const _MilestoneRail({required this.m, required this.last});
   final FutureMeMilestone m;
@@ -132,30 +142,40 @@ class _MilestoneRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final color = colorForKind(m.kind);
+    final highlight = m.kind == 'goal' || m.kind == 'forecast' || m.kind == 'life_event';
     final year = (m.date != null && m.date!.length >= 4) ? m.date!.substring(0, 4) : '';
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 44, child: Text(year, style: tt.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700, color: cs.primary))),
-          Column(children: [
-            CircleAvatar(radius: 16, backgroundColor: cs.primaryContainer,
-                child: Text(m.icon, style: const TextStyle(fontSize: 16))),
-            if (!last) Expanded(child: Container(width: 2, color: cs.outlineVariant)),
-          ]),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16, top: 2),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(m.title, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                if (m.detail.isNotEmpty) Text(m.detail, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                if (m.date != null) Text(m.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
-              ]),
-            ),
-          ),
-        ],
+
+    return JourneyRow(
+      emoji: m.icon,
+      color: color,
+      highlight: highlight,
+      last: last,
+      leading: Text(year, style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800, color: color)),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: highlight
+              ? LinearGradient(
+                  colors: [color.withValues(alpha: 0.26), AppColors.primary.withValues(alpha: 0.10)],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight)
+              : null,
+          color: highlight ? null : Colors.white.withValues(alpha: 0.05),
+          border: Border.all(color: color.withValues(alpha: highlight ? 0.45 : 0.14)),
+          boxShadow: highlight
+              ? [BoxShadow(color: color.withValues(alpha: 0.22), blurRadius: 18, offset: const Offset(0, 6))]
+              : null,
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(m.title, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+          if (m.detail.isNotEmpty)
+            Padding(padding: const EdgeInsets.only(top: 2),
+                child: Text(m.detail, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
+          if (m.date != null)
+            Padding(padding: const EdgeInsets.only(top: 4),
+                child: Text(m.date!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant))),
+        ]),
       ),
     );
   }

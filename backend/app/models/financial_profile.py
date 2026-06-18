@@ -22,6 +22,7 @@ from app.models.enums import (
     FoodSituation,
     LifeStage,
     LivingSituation,
+    OptimizationStyle,
     TransportMode,
     TuitionResponsibility,
 )
@@ -70,5 +71,13 @@ class FinancialProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Rent (housing) and fun/lifestyle — base building blocks for the waterfall.
     rent_monthly: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     lifestyle_monthly: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+
+    # What Advary optimizes the plan for (two identical budgets can want different plans).
+    optimization_style: Mapped[OptimizationStyle] = mapped_column(
+        _enum(OptimizationStyle, "optimization_style"),
+        default=OptimizationStyle.balanced,
+        server_default=text("'balanced'"),
+        nullable=False,
+    )
 
     user: Mapped[User] = relationship(back_populates="financial_profile")
