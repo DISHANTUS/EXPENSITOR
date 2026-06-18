@@ -100,11 +100,22 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def DATABASE_URL(self) -> str:
-        """Async SQLAlchemy URL (asyncpg driver), used by the app and Alembic."""
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        """Async SQLAlchemy URL (asyncpg driver), used by the app and Alembic.
+
+        Built via URL.create so a password with URL-special characters
+        (@ : / ? # …) — common in managed Postgres like Neon — is escaped
+        correctly instead of corrupting the DSN.
+        """
+        from sqlalchemy import URL
+
+        return URL.create(
+            "postgresql+asyncpg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_SERVER,
+            port=self.POSTGRES_PORT,
+            database=self.POSTGRES_DB,
+        ).render_as_string(hide_password=False)
 
 
 @lru_cache
