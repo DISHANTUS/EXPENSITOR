@@ -13,9 +13,15 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Receivable
-from app.models.enums import ReceivableKind, ReceivableStatus
-from app.services import calendar_service, feasibility_service, profile_service, settings_service
+from app.models import Receivable, SavingsGoal
+from app.models.enums import ReceivableKind, ReceivableStatus, SavingsGoalKind, SavingsGoalStatus
+from app.services import (
+    calendar_service,
+    feasibility_service,
+    forecast_service,
+    profile_service,
+    settings_service,
+)
 
 _ZERO = Decimal("0")
 _COUNTRY = {"IN": "India", "JP": "Japan", "US": "the US", "GB": "the UK"}
@@ -26,6 +32,58 @@ def _money(cur: str, v: Decimal) -> str:
     return f"{cur} {v:,.0f}"
 
 
+def _months_until(today, target) -> int:
+    return max(1, (target.year - today.year) * 12 + (target.month - today.month))
+
+
+async def _goal_line(db: AsyncSession, user_id: uuid.UUID, cur: str, today) -> tuple[str, str] | None:
+    """A specific, deterministic line about the primary goal. A DATED goal is
+    measured against the real forecast ETA (ahead/behind by N days), or the pace
+    it needs by its target month; an undated monthly-target goal uses its
+    feasibility band + pace. Returns (line, mood) or None when there are no goals."""
+    active = (await db.execute(select(SavingsGoal).where(
+        SavingsGoal.user_id == user_id, SavingsGoal.deleted_at.is_(None),
+        SavingsGoal.status == SavingsGoalStatus.active))).scalars().all()
+    if not active:
+        return None
+
+    # Prefer a dated goal (it has a deadline to be ahead/behind of); else the soonest.
+    dated = sorted((g for g in active if g.target_date), key=lambda g: g.target_date)
+    if dated:
+        goal = dated[0]
+        target = goal.target_date
+        eta = None
+        try:
+            fc = await forecast_service.forecast(db, user_id, goal_id=str(goal.id), question="home")
+            cp = fc.future_me.current_path if fc and fc.future_me else None
+            eta = cp.eta if cp else None
+        except Exception:  # noqa: BLE001 — the forecast must never break the thought
+            eta = None
+        if eta is not None:
+            days = (target - eta).days
+            if days >= 7:
+                return (f"Your {goal.name} is ahead of schedule — about {days} days early at your current pace.", "celebrating")
+            if days <= -7:
+                needed = (goal.converted_amount / _months_until(today, target)).quantize(Decimal("1"))
+                return (f"Your {goal.name} is ~{abs(days)} days behind — around {_money(cur, needed)}/month gets it back on track.", "concerned")
+            return (f"Your {goal.name} is right on track for {eta:%b %Y}.", "idle")
+        # Not enough history to forecast yet — show the monthly pace toward the date.
+        needed = (goal.converted_amount / _months_until(today, target)).quantize(Decimal("1"))
+        return (f"Your {goal.name} — about {_money(cur, needed)}/month reaches it by {target:%b %Y}.", "idle")
+
+    # Undated monthly-target goal — use the feasibility band + monthly pace.
+    feas = await feasibility_service.assess(db, user_id)
+    if not feas.goals:
+        return None
+    g = feas.goals[0]
+    rate = _money(cur, g.target_monthly)
+    if g.probability_band in _POSITIVE:
+        return (f"Your {g.goal} is on track — about {rate}/month keeps you on pace.", "celebrating")
+    if g.probability_band == "medium":
+        return (f"Your {g.goal} is within reach — around {rate}/month gets you there.", "idle")
+    return (f"Your {g.goal} needs attention — it'd take about {rate}/month. Let's look at the plan.", "concerned")
+
+
 async def build(db: AsyncSession, user_id: uuid.UUID) -> dict:
     today = await calendar_service.user_today(db, user_id)
     cur = (await settings_service.get_settings(db, user_id)).base_currency
@@ -34,19 +92,11 @@ async def build(db: AsyncSession, user_id: uuid.UUID) -> dict:
     lines: list[str] = []
     mood = "idle"
 
-    # 1) Goal status (from the feasibility engine).
-    feas = await feasibility_service.assess(db, user_id)
-    if feas.goals:
-        g = feas.goals[0]
-        rate = _money(cur, g.target_monthly)
-        if g.probability_band in _POSITIVE:
-            lines.append(f"{g.goal} is on track — about {rate}/month keeps you on pace.")
-            mood = "celebrating"
-        elif g.probability_band == "medium":
-            lines.append(f"{g.goal} is within reach — around {rate}/month gets you there.")
-        else:
-            lines.append(f"{g.goal} needs attention — it'd take about {rate}/month. Let's look at the plan.")
-            mood = "concerned"
+    # 1) Goal status — specific (ahead/behind by N days, or the pace it needs).
+    goal_line = await _goal_line(db, user_id, cur, today)
+    if goal_line is not None:
+        lines.append(goal_line[0])
+        mood = goal_line[1]
 
     # 2) Who owes you (receivables).
     pending = (await db.execute(select(Receivable).where(

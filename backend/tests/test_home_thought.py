@@ -41,3 +41,21 @@ async def test_composes_goal_receivable_and_milestone(client: AsyncClient):
     assert "japan fund" in blob                 # goal status
     assert "ravi" in blob and "3,000" in blob    # who owes
     assert "moving to japan" in blob and "2028" in blob   # milestone
+
+
+async def test_dated_goal_thought_is_specific(client: AsyncClient):
+    """A dated goal's line is concrete — a pace toward its target month, or an
+    ahead/behind-by-N-days reading — never just a vague 'on track'."""
+    h = await _auth(client, email="dated@example.com")
+    await client.post("/api/v1/income-sources", json={
+        "label": "Salary", "source_type": "salary", "kind": "recurring",
+        "original_amount": "60000", "original_currency": "INR", "recurrence_day": 1}, headers=h)
+    await client.post("/api/v1/savings-goals", json={
+        "name": "Japan Fund", "kind": "custom_goal", "original_amount": "300000",
+        "original_currency": "INR", "target_date": "2027-12-01"}, headers=h)
+
+    t = (await client.get("/api/v1/companion/home-thought", headers=h)).json()
+    goal = next((ln for ln in t["lines"] if "japan fund" in ln.lower()), "")
+    assert goal
+    # Specific: a month/year, a per-month figure, or a days-early/behind reading.
+    assert ("2027" in goal or "/month" in goal or "days" in goal)
