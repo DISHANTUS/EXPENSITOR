@@ -71,6 +71,18 @@ async def test_future_move_and_other_note(client: AsyncClient):
     assert p["life_stage"] == "other" and p["life_stage_note"] == "Preparing for MEXT"
 
 
+async def test_transport_other_and_new_modes(client: AsyncClient):
+    h = await _auth(client, email="transport@example.com")
+    # The onboarding blocker: "I ride a bike to college" is now a real option.
+    p = (await client.patch("/api/v1/users/me/profile",
+         json={"transport_mode": "motorcycle", "transport_monthly": "2000"}, headers=h)).json()
+    assert p["transport_mode"] == "motorcycle" and p["transport_monthly"] == "2000.0000"
+    # And anything unlisted is captured via Other → free text.
+    p2 = (await client.patch("/api/v1/users/me/profile",
+          json={"transport_mode": "other", "transport_note": "Carpool with neighbours"}, headers=h)).json()
+    assert p2["transport_mode"] == "other" and p2["transport_note"] == "Carpool with neighbours"
+
+
 async def test_editable_later_can_change_and_clear(client: AsyncClient):
     h = await _auth(client)
     await client.patch("/api/v1/users/me/profile", json={"life_stage": "ug_student", "current_city": "Chennai"}, headers=h)

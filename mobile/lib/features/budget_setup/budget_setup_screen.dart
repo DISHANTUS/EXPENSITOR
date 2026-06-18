@@ -35,14 +35,17 @@ const _lifeStages = {
 const _living = {'Parents': 'with_parents', 'Partner': 'with_partner', 'Friends': 'with_friends',
   'Alone': 'alone', 'Dormitory': 'dormitory'};
 const _food = {'Mostly at home': 'home_cooked', 'A mix of both': 'mix', 'Mostly outside': 'mostly_outside'};
-const _transport = {'Walk': 'walk', 'Bicycle': 'bicycle', 'Bus': 'bus', 'Train': 'train', 'Mixed': 'mixed'};
+const _transport = {
+  'Walk': 'walk', 'Bicycle': 'bicycle', 'Motorcycle / Scooter': 'motorcycle',
+  'Bus': 'bus', 'Train / Metro': 'train', 'Car': 'car', 'Auto / Cab': 'auto', 'Mixed': 'mixed',
+};
 const _incomeSources = {'Salary': 'salary', 'Business': 'business', 'Freelance': 'freelance',
   'Scholarship': 'scholarship', 'Part-time': 'part_time', 'Family support': 'family_support'};
 const _optimize = {'Maximum savings': 'max_savings', 'Balanced life': 'balanced',
   'Comfort first': 'comfort_first', 'Chase my goal': 'aggressive_goal'};
 
 class _Draft {
-  String? country, otherCountry, lifeStage, lifeStageNote, living, livingNote, food, transportMode, optimize;
+  String? country, otherCountry, lifeStage, lifeStageNote, living, livingNote, food, transportMode, transportNote, optimize;
   String foodAmount = '', transportAmount = '', incomeAmount = '', lifestyleAmount = '', rentAmount = '';
   String goalName = '', goalAmount = '';
   String? incomeSource;
@@ -146,9 +149,14 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             _d.foodAmount, (v) => _d.foodAmount = v);
       case 'transport':
         return _choice(_transport.keys.toList(),
-            current: _transport.entries.where((e) => e.value == _d.transportMode).map((e) => e.key).firstOrNull,
-            onPick: (label, _) => setState(() => _d.transportMode = _transport[label]),
-            enabled: _d.transportMode != null, allowOther: false);
+            current: _d.transportMode == 'other'
+                ? _d.transportNote
+                : _transport.entries.where((e) => e.value == _d.transportMode).map((e) => e.key).firstOrNull,
+            onPick: (label, custom) => setState(() {
+              if (custom) { _d.transportMode = 'other'; _d.transportNote = label; }
+              else { _d.transportMode = _transport[label]; _d.transportNote = null; }
+            }),
+            enabled: _d.transportMode != null);
       case 'transportAmt':
         return _amount('Transport per month ($cur)', _d.transportAmount, (v) => _d.transportAmount = v, optional: true);
       case 'scholarship':
@@ -223,6 +231,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         if (_d.food != null) 'food_situation': _d.food,
         if (_d.optimize != null) 'optimization_style': _d.optimize,
         if (_d.transportMode != null) 'transport_mode': _d.transportMode,
+        if ((_d.transportNote ?? '').isNotEmpty) 'transport_note': _d.transportNote,
       };
       final foodAmt = _d.foodAmount.trim();
       if (foodAmt.isNotEmpty) body[_d.food == 'home_cooked' ? 'food_monthly' : 'food_daily'] = foodAmt;

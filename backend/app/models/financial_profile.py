@@ -63,6 +63,7 @@ class FinancialProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     food_daily: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))     # eating-out / day
 
     transport_mode: Mapped[TransportMode | None] = mapped_column(_enum(TransportMode, "transport_mode"))
+    transport_note: Mapped[str | None] = mapped_column(String(120))   # free-text when mode == other
     transport_monthly: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
 
     tuition_responsibility: Mapped[TuitionResponsibility | None] = mapped_column(

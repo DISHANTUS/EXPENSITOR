@@ -328,9 +328,13 @@ class FoodSituation(str, enum.Enum):
 class TransportMode(str, enum.Enum):
     walk = "walk"
     bicycle = "bicycle"
+    motorcycle = "motorcycle"      # bike / scooter — personal vehicle (fuel + upkeep)
     bus = "bus"
     train = "train"
+    car = "car"
+    auto = "auto"                  # auto-rickshaw / shared cab
     mixed = "mixed"
+    other = "other"                # free-text lives in transport_note
 
 
 class TuitionResponsibility(str, enum.Enum):

@@ -36,6 +36,7 @@ class FinancialProfileRead(BaseModel):
     food_monthly: Decimal | None = None
     food_daily: Decimal | None = None
     transport_mode: TransportMode | None = None
+    transport_note: str | None = None
     transport_monthly: Decimal | None = None
     tuition_responsibility: TuitionResponsibility | None = None
     rent_monthly: Decimal | None = None
@@ -62,6 +63,7 @@ class FinancialProfileUpdate(BaseModel):
     food_monthly: Money | None = None
     food_daily: Money | None = None
     transport_mode: TransportMode | None = None
+    transport_note: str | None = Field(default=None, max_length=120)
     transport_monthly: Money | None = None
     tuition_responsibility: TuitionResponsibility | None = None
     rent_monthly: Money | None = None
