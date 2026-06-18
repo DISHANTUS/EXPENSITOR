@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.intelligence.budget import buckets
 from app.models import IncomeSource, RecurringRule, SavingsGoal
-from app.models.enums import ExpenseBucket, IncomeKind, SavingsGoalKind, SavingsGoalStatus
+from app.models.enums import ExpenseBucket, FoodSituation, IncomeKind, SavingsGoalKind, SavingsGoalStatus
 from app.schemas.budget_reality import BudgetLine, BucketBreakdown, BudgetReality, IncomeLine
 from app.services import calendar_service, profile_service, settings_service
 
@@ -64,12 +64,17 @@ async def build(db: AsyncSession, user_id: uuid.UUID) -> BudgetReality:
     adjustable: list[BudgetLine] = []
 
     # Profile-derived essentials. Rent is PROTECTED housing (cut last, like food).
-    if profile.food_monthly:
-        protected.append(BudgetLine(label="Food (groceries)", monthly=profile.food_monthly.quantize(_Q),
-                                    origin="profile", kind="essential_living"))
-    elif profile.food_daily:
-        protected.append(BudgetLine(label="Food (daily)", monthly=(profile.food_daily * days).quantize(_Q),
-                                    origin="profile", kind="essential_living"))
+    # Food from onboarding is a recurring essential ONLY when the user mostly eats
+    # out (a genuinely committed food spend). For home-cooked / mixed / other,
+    # food style is lifestyle info — not a daily budget — so it must NOT inflate
+    # Essential Living; real food spending is learned from logged expenses instead.
+    if profile.food_situation == FoodSituation.mostly_outside:
+        if profile.food_monthly:
+            protected.append(BudgetLine(label="Food (eating out)", monthly=profile.food_monthly.quantize(_Q),
+                                        origin="profile", kind="essential_living"))
+        elif profile.food_daily:
+            protected.append(BudgetLine(label="Food (eating out)", monthly=(profile.food_daily * days).quantize(_Q),
+                                        origin="profile", kind="essential_living"))
     if profile.transport_monthly:
         protected.append(BudgetLine(label="Transport", monthly=profile.transport_monthly.quantize(_Q),
                                     origin="profile", kind="essential_living"))

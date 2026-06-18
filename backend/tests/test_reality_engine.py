@@ -49,7 +49,7 @@ async def test_multi_income_broken_out_by_source(client: AsyncClient):
 async def test_buckets_classify_profile_and_recurring(client: AsyncClient):
     h = await _auth(client)
     await client.patch("/api/v1/users/me/profile", json={
-        "life_stage": "pg_student", "rent_monthly": "80000",
+        "life_stage": "pg_student", "rent_monthly": "80000", "food_situation": "mostly_outside",
         "food_monthly": "35000", "transport_monthly": "10000", "lifestyle_monthly": "15000"}, headers=h)
     await _recurring(client, h, "Netflix", "subscription", "1500")   # adjustable
     await _recurring(client, h, "Electricity", "bill", "4000")       # protected (utility)
@@ -74,7 +74,7 @@ async def test_survival_before_savings_example(client: AsyncClient):
     h = await _auth(client)
     await _income(client, h, "Salary", "salary", "5000")
     await client.patch("/api/v1/users/me/profile", json={
-        "food_monthly": "3000", "transport_monthly": "900"}, headers=h)
+        "food_situation": "mostly_outside", "food_monthly": "3000", "transport_monthly": "900"}, headers=h)
     await _recurring(client, h, "Subscription", "subscription", "200")
 
     r = (await client.get("/api/v1/budget/reality", headers=h)).json()
@@ -86,11 +86,31 @@ async def test_survival_before_savings_example(client: AsyncClient):
 
 async def test_food_daily_is_annualised_to_month(client: AsyncClient):
     h = await _auth(client)
-    await client.patch("/api/v1/users/me/profile", json={"food_daily": "100"}, headers=h)
+    await client.patch("/api/v1/users/me/profile",
+                       json={"food_situation": "mostly_outside", "food_daily": "100"}, headers=h)
     r = (await client.get("/api/v1/budget/reality", headers=h)).json()
     food = next(ln for ln in r["protected"]["lines"] if "Food" in ln["label"])
     # 100/day × days-in-month (28..31)
     assert 2800.0 <= float(food["monthly"]) <= 3100.0
+
+
+async def test_food_only_essential_when_mostly_outside(client: AsyncClient):
+    """Food style is lifestyle, not a daily budget: a mixed/home eater's onboarding
+    food amount must NOT inflate Essential Living — only a 'mostly outside' eater's
+    does (real food spend is learned from logged expenses)."""
+    h = await _auth(client)
+    await _income(client, h, "Salary", "salary", "50000")
+    # A mixed eater who happened to type an amount → food is NOT a protected essential.
+    await client.patch("/api/v1/users/me/profile",
+                       json={"food_situation": "mix", "food_daily": "200"}, headers=h)
+    r = (await client.get("/api/v1/budget/reality", headers=h)).json()
+    assert not any("Food" in ln["label"] for ln in r["protected"]["lines"])
+
+    # The same amount under "mostly outside" → now it counts.
+    await client.patch("/api/v1/users/me/profile",
+                       json={"food_situation": "mostly_outside", "food_daily": "200"}, headers=h)
+    r2 = (await client.get("/api/v1/budget/reality", headers=h)).json()
+    assert any("Food" in ln["label"] for ln in r2["protected"]["lines"])
 
 
 async def test_optimization_style_surfaced(client: AsyncClient):

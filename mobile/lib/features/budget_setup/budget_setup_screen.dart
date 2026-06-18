@@ -64,7 +64,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
   bool get _needsRent => _d.living != null && _d.living != 'with_parents' && _d.living != 'dormitory';
 
   List<String> get _steps => [
-        'intro', 'country', 'life', 'living', 'foodHabit', 'foodAmount', 'transport', 'transportAmt',
+        'intro', 'country', 'life', 'living', 'foodHabit',
+        // Only ask a food amount when the user mostly eats out — for home/mixed/other
+        // food is lifestyle, not a daily budget; real spend comes from logged expenses.
+        if (_d.food == 'mostly_outside') 'foodAmount',
+        'transport', 'transportAmt',
         if (_isStudent) 'scholarship',
         if (_isStudent) 'partTime',
         'income', 'lifestyle',
@@ -83,7 +87,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         'life' => 'Your life stage changes everything — a student isn’t budgeted like a business owner.',
         'living' => 'Who you live with shapes rent and food more than almost anything else.',
         'foodHabit' => 'Food is usually the biggest everyday cost — how do you mostly eat?',
-        'foodAmount' => 'Roughly what you spend on food, so I can protect it as an essential.',
+        'foodAmount' => 'Since you mostly eat out, roughly your daily food spend — I’ll protect it as an essential.',
         'transport' => 'How you get around tells me what’s essential vs. flexible.',
         'transportAmt' => 'Your typical monthly transport cost.',
         'scholarship' => 'Scholarships count as income — it helps me size your real budget.',
@@ -145,8 +149,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             onPick: (label, custom) => setState(() => _d.food = custom ? 'other' : _food[label]),
             enabled: _d.food != null);
       case 'foodAmount':
-        final daily = _d.food != 'home_cooked';
-        return _amount(daily ? 'Food per day ($cur)' : 'Groceries per month ($cur)',
+        return _amount('Food per day when eating out ($cur)',
             _d.foodAmount, (v) => _d.foodAmount = v);
       case 'transport':
         return _choice(_transport.keys.toList(),
@@ -237,8 +240,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         if (_d.transportMode != null) 'transport_mode': _d.transportMode,
         if ((_d.transportNote ?? '').isNotEmpty) 'transport_note': _d.transportNote,
       };
+      // Only "mostly outside" contributes a recurring food essential (a daily
+      // eat-out spend). Home/mixed/other learn food spend from real expenses.
       final foodAmt = _d.foodAmount.trim();
-      if (foodAmt.isNotEmpty) body[_d.food == 'home_cooked' ? 'food_monthly' : 'food_daily'] = foodAmt;
+      if (_d.food == 'mostly_outside' && foodAmt.isNotEmpty) body['food_daily'] = foodAmt;
       if (_d.transportAmount.trim().isNotEmpty) body['transport_monthly'] = _d.transportAmount.trim();
       if (_needsRent && _d.rentAmount.trim().isNotEmpty) body['rent_monthly'] = _d.rentAmount.trim();
       if (_d.lifestyleAmount.trim().isNotEmpty) body['lifestyle_monthly'] = _d.lifestyleAmount.trim();

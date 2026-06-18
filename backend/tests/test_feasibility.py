@@ -39,8 +39,8 @@ async def test_tokyo_goal_is_very_high(client: AsyncClient):
     await _income(client, h, "Family", "family_support", "50000")
     await client.patch("/api/v1/users/me/profile", json={
         "life_stage": "pg_student", "current_country": "jp",
-        "rent_monthly": "80000", "food_monthly": "30000", "transport_monthly": "15000",
-        "lifestyle_monthly": "20000"}, headers=h)
+        "rent_monthly": "80000", "food_situation": "mostly_outside", "food_monthly": "30000",
+        "transport_monthly": "15000", "lifestyle_monthly": "20000"}, headers=h)
     await _monthly_goal(client, h, "Japan Travel Fund", "50000")
 
     f = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
@@ -55,7 +55,7 @@ async def test_five_thousand_save_two_thousand_is_low(client: AsyncClient):
     h = await _auth(client)
     await _income(client, h, "Salary", "salary", "5000")
     await client.patch("/api/v1/users/me/profile",
-                       json={"food_monthly": "3000", "transport_monthly": "900"}, headers=h)
+                       json={"food_situation": "mostly_outside", "food_monthly": "3000", "transport_monthly": "900"}, headers=h)
     await _monthly_goal(client, h, "Savings", "2000")
 
     f = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
@@ -69,7 +69,7 @@ async def test_probability_is_a_band_not_binary(client: AsyncClient):
     h = await _auth(client)
     await _income(client, h, "Salary", "salary", "50000")
     await client.patch("/api/v1/users/me/profile",
-                       json={"food_monthly": "12000", "transport_monthly": "3000", "lifestyle_monthly": "8000"}, headers=h)
+                       json={"food_situation": "mostly_outside", "food_monthly": "12000", "transport_monthly": "3000", "lifestyle_monthly": "8000"}, headers=h)
     await _monthly_goal(client, h, "Goal", "30000")       # needs trimming lifestyle → mid band
     f = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
     assert f["goals"][0]["probability_band"] in ("medium", "low", "high")
@@ -108,7 +108,7 @@ async def test_backup_money_is_surplus_only(client: AsyncClient):
     # goal isn't penalised by a forced reserve).
     h = await _auth(client, email="tight@example.com")
     await _income(client, h, "Salary", "salary", "5000")
-    await client.patch("/api/v1/users/me/profile", json={"food_monthly": "4500"}, headers=h)
+    await client.patch("/api/v1/users/me/profile", json={"food_situation": "mostly_outside", "food_monthly": "4500"}, headers=h)
     await _monthly_goal(client, h, "Savings", "500")
     tight = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
     assert float(tight["backup_money"]) == 0
@@ -116,7 +116,7 @@ async def test_backup_money_is_surplus_only(client: AsyncClient):
     # Roomy month: money left after living + goal → backup money appears.
     h2 = await _auth(client, email="roomy@example.com")
     await _income(client, h2, "Salary", "salary", "5000")
-    await client.patch("/api/v1/users/me/profile", json={"food_monthly": "2000"}, headers=h2)
+    await client.patch("/api/v1/users/me/profile", json={"food_situation": "mostly_outside", "food_monthly": "2000"}, headers=h2)
     await _monthly_goal(client, h2, "Savings", "1000")
     roomy = (await client.get("/api/v1/budget/feasibility", headers=h2)).json()
     assert float(roomy["backup_money"]) > 0
