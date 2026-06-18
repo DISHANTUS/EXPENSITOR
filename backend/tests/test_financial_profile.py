@@ -83,6 +83,20 @@ async def test_transport_other_and_new_modes(client: AsyncClient):
     assert p2["transport_mode"] == "other" and p2["transport_note"] == "Carpool with neighbours"
 
 
+async def test_supports_non_earning_life_stages_and_other_food(client: AsyncClient):
+    """Homemaker / retired / between-jobs are first-class life stages, and food
+    accepts 'other' — so every real profile can be represented (no income needed)."""
+    h = await _auth(client, email="homemaker@example.com")
+    for stage in ("homemaker", "retired", "unemployed"):
+        p = (await client.patch("/api/v1/users/me/profile", json={"life_stage": stage}, headers=h)).json()
+        assert p["life_stage"] == stage
+    p = (await client.patch("/api/v1/users/me/profile", json={"food_situation": "other"}, headers=h)).json()
+    assert p["food_situation"] == "other"
+    # A no-income profile is valid (the feasibility engine handles zero income).
+    f = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
+    assert f["income_total"] == "0.0000"
+
+
 async def test_editable_later_can_change_and_clear(client: AsyncClient):
     h = await _auth(client)
     await client.patch("/api/v1/users/me/profile", json={"life_stage": "ug_student", "current_city": "Chennai"}, headers=h)

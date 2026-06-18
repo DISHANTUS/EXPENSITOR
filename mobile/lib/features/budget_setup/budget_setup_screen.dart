@@ -31,6 +31,7 @@ const _lifeStages = {
   'School / High School': 'high_school', 'UG Student': 'ug_student', 'PG / Master’s': 'pg_student',
   'Scholarship Student': 'scholarship_student', 'Working Professional': 'working_professional',
   'Self-employed': 'self_employed', 'Business Owner': 'business_owner',
+  'Homemaker': 'homemaker', 'Retired': 'retired', 'Between jobs': 'unemployed',
 };
 const _living = {'Parents': 'with_parents', 'Partner': 'with_partner', 'Friends': 'with_friends',
   'Alone': 'alone', 'Dormitory': 'dormitory'};
@@ -140,9 +141,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             enabled: _d.living != null);
       case 'foodHabit':
         return _choice(_food.keys.toList(),
-            current: _food.entries.where((e) => e.value == _d.food).map((e) => e.key).firstOrNull,
-            onPick: (label, _) => setState(() => _d.food = _food[label]),
-            enabled: _d.food != null, allowOther: false);
+            current: _d.food == 'other' ? 'Other' : _food.entries.where((e) => e.value == _d.food).map((e) => e.key).firstOrNull,
+            onPick: (label, custom) => setState(() => _d.food = custom ? 'other' : _food[label]),
+            enabled: _d.food != null);
       case 'foodAmount':
         final daily = _d.food != 'home_cooked';
         return _amount(daily ? 'Food per day ($cur)' : 'Groceries per month ($cur)',
@@ -168,8 +169,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             amountLabel: 'Part-time income per month ($cur)', amount: _d.partTimeAmount,
             onAmount: (v) => _d.partTimeAmount = v);
       case 'income':
+        final incRaw = _d.incomeAmount.trim();
         return _pad([
-          _moneyField('Monthly income ($cur)', _d.incomeAmount, (v) => setState(() => _d.incomeAmount = v)),
+          _moneyField('Monthly income ($cur) — leave blank if none', _d.incomeAmount, (v) => setState(() => _d.incomeAmount = v)),
           const SizedBox(height: 16),
           const Text('Where does most of it come from?'),
           const SizedBox(height: 8),
@@ -179,7 +181,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             onChanged: (v, custom) => setState(() => _d.incomeSource = custom ? 'other' : _incomeSources[v]),
           ),
           const SizedBox(height: 20),
-          _nav(enabled: double.tryParse(_d.incomeAmount.trim()) != null),
+          // Income is optional — homemakers, retirees and between-jobs users may
+          // have none (or it's captured as scholarship/part-time/family support).
+          _nav(enabled: incRaw.isEmpty || double.tryParse(incRaw) != null),
         ]);
       case 'lifestyle':
         return _amount('Fun & lifestyle per month ($cur)', _d.lifestyleAmount,

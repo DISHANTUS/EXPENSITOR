@@ -307,6 +307,9 @@ class LifeStage(str, enum.Enum):
     working_professional = "working_professional"
     self_employed = "self_employed"
     business_owner = "business_owner"
+    homemaker = "homemaker"
+    retired = "retired"
+    unemployed = "unemployed"
     other = "other"
 
 
@@ -323,6 +326,7 @@ class FoodSituation(str, enum.Enum):
     home_cooked = "home_cooked"
     mostly_outside = "mostly_outside"
     mix = "mix"
+    other = "other"
 
 
 class TransportMode(str, enum.Enum):
