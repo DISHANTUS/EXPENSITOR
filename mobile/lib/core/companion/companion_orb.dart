@@ -10,9 +10,12 @@ enum OrbState { idle, listening, speaking, celebrating, concerned }
 /// A custom-painted "living spirit" orb — 80% orb, 20% face (eyes + mouth that
 /// shift with mood/voice). Floats, breathes, glows, pulses, and sparks. No assets.
 class CompanionOrb extends StatefulWidget {
-  const CompanionOrb({super.key, this.state = OrbState.idle, this.size = 64});
+  const CompanionOrb({super.key, this.state = OrbState.idle, this.size = 64, this.palette});
   final OrbState state;
   final double size;
+  /// Override the palette (used by the theme picker to preview each pack's orb);
+  /// defaults to the active theme.
+  final AppPalette? palette;
 
   @override
   State<CompanionOrb> createState() => _CompanionOrbState();
@@ -46,7 +49,7 @@ class _CompanionOrbState extends State<CompanionOrb> with SingleTickerProviderSt
             offset: Offset(0, dy),
             child: Transform.scale(
               scale: scale,
-              child: CustomPaint(painter: _OrbPainter(widget.state, t), size: Size.square(widget.size + pad)),
+              child: CustomPaint(painter: _OrbPainter(widget.state, t, widget.palette), size: Size.square(widget.size + pad)),
             ),
           );
         },
@@ -56,15 +59,18 @@ class _CompanionOrbState extends State<CompanionOrb> with SingleTickerProviderSt
 }
 
 class _OrbPainter extends CustomPainter {
-  _OrbPainter(this.state, this.t);
+  _OrbPainter(this.state, this.t, this.palette);
   final OrbState state;
   final double t;
+  final AppPalette? palette;
+
+  AppPalette get _p => palette ?? AppColors.active;
 
   Color get _color => switch (state) {
-        OrbState.listening || OrbState.speaking => AppColors.secondary,
-        OrbState.celebrating => AppColors.accent,
-        OrbState.concerned => const Color(0xFF6B79B0),
-        OrbState.idle => AppColors.primary,
+        OrbState.listening || OrbState.speaking => _p.secondary,            // highlight (e.g. moon silver)
+        OrbState.celebrating => _p.primary,                                 // body colour + gold sparks
+        OrbState.concerned => AppColors.concernedOf(_p.primary),            // theme-aware dark variant
+        OrbState.idle => _p.primary,
       };
 
   @override
@@ -98,7 +104,7 @@ class _OrbPainter extends CustomPainter {
     }
     // --- celebrating: spark particles ---
     if (state == OrbState.celebrating) {
-      final sparks = [AppColors.secondary, AppColors.primary, Colors.white, AppColors.accent];
+      final sparks = [_p.spark, _p.primary, Colors.white, _p.secondary];
       for (var i = 0; i < 8; i++) {
         final ang = (i / 8) * 2 * math.pi + tau * 0.3;
         final p = ((t + i * 0.12) % 1);
@@ -170,5 +176,5 @@ class _OrbPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_OrbPainter old) => old.t != t || old.state != state;
+  bool shouldRepaint(_OrbPainter old) => old.t != t || old.state != state || old.palette != palette;
 }

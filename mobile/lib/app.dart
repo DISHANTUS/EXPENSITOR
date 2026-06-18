@@ -7,6 +7,7 @@ import 'core/onboarding/companion_tour.dart';
 import 'core/router/app_router.dart';
 import 'core/settings/settings_repository.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 import 'core/voice/device_voices.dart';
 import 'core/voice/voice_service.dart';
 
@@ -16,6 +17,7 @@ class ExpensitorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    ref.watch(themeProvider);   // re-skin the whole app when the theme pack changes
     return MaterialApp.router(
       title: 'Expensitor',
       debugShowCheckedModeBanner: false,

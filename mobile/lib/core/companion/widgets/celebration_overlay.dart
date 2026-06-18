@@ -47,7 +47,7 @@ class _CelebrationOverlayState extends ConsumerState<CelebrationOverlay> {
           minBlastForce: 8,
           gravity: 0.25,
           shouldLoop: false,
-          colors: const [AppColors.primary, AppColors.secondary, AppColors.accent, Colors.white],
+          colors: [AppColors.primary, AppColors.accent, AppColors.spark, Colors.white],
         ),
       ),
     );

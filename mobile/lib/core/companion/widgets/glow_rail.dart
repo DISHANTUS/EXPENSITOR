@@ -21,20 +21,21 @@ class GlowNode extends StatelessWidget {
   const GlowNode({
     super.key,
     required this.emoji,
-    this.color = AppColors.primary,
+    this.color,
     this.size = 38,
     this.highlight = false,
     this.dim = false,
   });
 
   final String emoji;
-  final Color color;
+  final Color? color;
   final double size;
   final bool highlight;
   final bool dim;
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? AppColors.primary;
     final glow = highlight ? 0.65 : (dim ? 0.16 : 0.40);
     return Container(
       width: size,
@@ -64,25 +65,28 @@ class GlowNode extends StatelessWidget {
 /// The glowing segment of rail between two nodes. Stretches to the row height
 /// (use inside an Expanded within an IntrinsicHeight Row).
 class RailConnector extends StatelessWidget {
-  const RailConnector({super.key, this.color = AppColors.primary, this.dim = false});
-  final Color color;
+  const RailConnector({super.key, this.color, this.dim = false});
+  final Color? color;
   final bool dim;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 2.5,
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              color.withValues(alpha: dim ? 0.18 : 0.5),
-              color.withValues(alpha: dim ? 0.04 : 0.14),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final color = this.color ?? AppColors.primary;
+    return Container(
+      width: 2.5,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withValues(alpha: dim ? 0.18 : 0.5),
+            color.withValues(alpha: dim ? 0.04 : 0.14),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// One step on the journey: an optional leading label (e.g. a year), the rail
@@ -94,7 +98,7 @@ class JourneyRow extends StatelessWidget {
     required this.emoji,
     required this.child,
     this.leading,
-    this.color = AppColors.primary,
+    this.color,
     this.highlight = false,
     this.dim = false,
     this.last = false,
@@ -104,7 +108,7 @@ class JourneyRow extends StatelessWidget {
   final String emoji;
   final Widget child;
   final Widget? leading;
-  final Color color;
+  final Color? color;
   final bool highlight;
   final bool dim;
   final bool last;

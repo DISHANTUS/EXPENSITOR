@@ -6,6 +6,7 @@ import '../auth/auth_controller.dart';
 import '../auth/auth_state.dart';
 import '../voice/voice_service.dart';
 import '../../features/advisor/chat_screen.dart';
+import '../../features/appearance/appearance_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/budget_setup/budget_setup_screen.dart';
 import '../../features/budget_setup/plan_screen.dart';
@@ -53,6 +54,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/contact', builder: (_, __) => const ContactScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/voice-studio', builder: (_, __) => const VoiceStudioScreen()),
+      GoRoute(path: '/appearance', builder: (_, __) => const AppearanceScreen()),
       GoRoute(path: '/convert', builder: (_, __) => const CurrencyCenterScreen()),
       GoRoute(path: '/budget-setup', builder: (_, __) => const BudgetSetupScreen()),
       GoRoute(path: '/plan', builder: (_, __) => const PlanScreen()),

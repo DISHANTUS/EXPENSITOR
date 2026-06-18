@@ -11,6 +11,7 @@ import '../../core/future_me/future_me_repository.dart';
 import '../../core/onboarding/tour_controller.dart';
 import '../../core/relationships/relationship_repository.dart';
 import '../../core/settings/settings_repository.dart';
+import '../../core/theme/theme_controller.dart';
 import '../../core/timeline/timeline_repository.dart';
 import '../../core/voice/voice_service.dart';
 import '../calendar/calendar_repository.dart';
@@ -338,6 +339,15 @@ class SettingsScreen extends ConsumerWidget {
               trailing: Text(settings.valueOrNull?.companionName ?? 'Advary',
                   style: Theme.of(context).textTheme.titleMedium),
               onTap: () => changeCompanionName(context, ref, settings.valueOrNull?.companionName),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('Appearance'),
+              subtitle: const Text('Theme packs — Crimson Moon, Aurora, Midnight, Sakura'),
+              trailing: Text(ref.watch(themeProvider).name, style: Theme.of(context).textTheme.bodySmall),
+              onTap: () => context.go('/appearance'),
             ),
           ),
           Card(

@@ -82,7 +82,7 @@ class _Hero extends StatelessWidget {
             width: 64, height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const RadialGradient(colors: [AppColors.accent, Color(0xFF7A2A59)]),
+              gradient: RadialGradient(colors: [AppColors.accent, AppColors.accent.withValues(alpha: 0.45)]),
               boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.6), blurRadius: 26, spreadRadius: 2)],
             ),
             alignment: Alignment.center,

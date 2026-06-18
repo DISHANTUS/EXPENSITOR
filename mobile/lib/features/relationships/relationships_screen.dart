@@ -74,7 +74,7 @@ class _PersonCard extends StatelessWidget {
               width: 48, height: 48, alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const RadialGradient(colors: [AppColors.accent, Color(0xFF7A2A59)]),
+                gradient: RadialGradient(colors: [AppColors.accent, AppColors.accent.withValues(alpha: 0.45)]),
                 boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.5), blurRadius: 18, spreadRadius: 1)],
               ),
               child: Text(person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',

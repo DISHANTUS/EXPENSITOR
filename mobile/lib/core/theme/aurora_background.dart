@@ -29,7 +29,7 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        const Positioned.fill(child: ColoredBox(color: AppColors.bg)),
+        Positioned.fill(child: ColoredBox(color: AppColors.bg)),
         Positioned.fill(
           child: RepaintBoundary(
             child: AnimatedBuilder(

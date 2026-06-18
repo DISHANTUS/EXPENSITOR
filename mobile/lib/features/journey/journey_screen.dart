@@ -173,7 +173,7 @@ class _ProgressBar extends StatelessWidget {
             widthFactor: value.clamp(0.02, 1.0),
             child: Container(
               height: 10,
-              decoration: const BoxDecoration(gradient: AppColors.gradient),
+              decoration: BoxDecoration(gradient: AppColors.gradient),
             ),
           ),
         ],
