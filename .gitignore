@@ -33,3 +33,6 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Full-state backups — real user emails + password hashes; never commit
+backend/backups/
