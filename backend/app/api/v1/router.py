@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     decisions,
     dev,
     expenses,
+    facts,
     financial_health,
     income_sources,
     incomes,
@@ -71,6 +72,7 @@ api_router.include_router(recommendations.router)
 api_router.include_router(preferences.router)
 api_router.include_router(assistant.router)
 api_router.include_router(commentary.router)
+api_router.include_router(facts.router)
 api_router.include_router(financial_health.router)
 api_router.include_router(outcomes.router)
 api_router.include_router(voice.router)

@@ -13,6 +13,7 @@ import '../voice/voice_plan.dart';
 import '../voice/voice_service.dart';
 import 'companion_mood.dart';
 import 'companion_orb.dart';
+import 'companion_orb_button.dart';
 import 'mood_models.dart';
 import 'mood_repository.dart';
 import 'reaction.dart';
@@ -213,25 +214,6 @@ class _CompanionPanel extends StatelessWidget {
   final VoidCallback? onTapReaction;
   final VoidCallback onCollapse;
 
-  void _showReasons(BuildContext context) {
-    final m = live;
-    if (m == null) return;
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(m.moodWord.isEmpty ? 'How I’m feeling' : m.moodWord),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: m.reasons.isEmpty
-              ? [const Text('I’m steady — nothing’s pulling my mood right now.')]
-              : [for (final r in m.reasons) Text('• ${r.label}: ${r.value}')],
-        ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -244,10 +226,9 @@ class _CompanionPanel extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              onTap: () => _showReasons(context),
-              child: CompanionOrb(state: orbState, size: 48),
-            ),
+            // The orb is alive: tap → a fun fact, double-tap → encouragement,
+            // long-press → "how I'm feeling".
+            CompanionOrbButton(orbState: orbState, size: 48, live: live, encouragements: extraLines),
             const SizedBox(width: 6),
             Expanded(
               child: AnimatedSwitcher(

@@ -16,6 +16,7 @@ import '../calendar/calendar_models.dart';
 import '../calendar/calendar_repository.dart';
 import 'add_event_sheet.dart';
 import 'dashboard_repository.dart';
+import 'did_you_know_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +59,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           const _QuickActions(),
           const _MemoryStrip(),
+          const DidYouKnowCard(),
           Card(
             margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Padding(

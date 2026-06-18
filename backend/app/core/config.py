@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     # --- Domain defaults ---
     DEFAULT_BASE_CURRENCY: str = "INR"
 
+    # --- Fun facts (companion fallback / orb / Home "Did you know?" card) ---
+    # Directory of drop-in `*.txt` fact packs. None → the package default
+    # (app/data/facts). Drop a new file in and restart; category = filename.
+    FACTS_DIR: str | None = None
+
+    # --- Backups (beta safety net) ---
+    # Where full-state snapshot JSON files are written. None → the package
+    # default (backend/backups, gitignored). Restore is a no-auth CLI so it
+    # works after a wipe when no developer account exists to log in.
+    BACKUP_DIR: str | None = None
+
     # --- Exchange-rate provider ---
     FRANKFURTER_BASE_URL: str = "https://api.frankfurter.app"
 

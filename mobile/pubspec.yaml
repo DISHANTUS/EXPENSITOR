@@ -31,3 +31,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Bundled starter fact packs so the companion always has facts offline. New
+    # files added to this folder are picked up automatically (no pubspec change).
+    - assets/facts/

@@ -7,6 +7,8 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/mood_repository.dart';
 import '../../core/companion/companion_scaffold.dart';
+import '../../core/facts/facts_prefs.dart';
+import '../../core/facts/facts_repository.dart';
 import '../../core/future_me/future_me_repository.dart';
 import '../../core/onboarding/tour_controller.dart';
 import '../../core/relationships/relationship_repository.dart';
@@ -255,6 +257,45 @@ class _VoiceToggles extends ConsumerWidget {
   }
 }
 
+/// Which fact categories Advary may draw from for the orb tap + the Home "Did
+/// you know?" card. Stored on-device; new packs are on by default.
+class _FactCategoryToggles extends ConsumerWidget {
+  const _FactCategoryToggles();
+
+  Future<void> _toggle(WidgetRef ref, String key, bool enabled) async {
+    await ref.read(factsPrefsProvider).toggle(key, enabled: enabled);
+    ref.invalidate(disabledFactCategoriesProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cats = ref.watch(factCategoriesProvider).valueOrNull ?? const [];
+    final disabled = ref.watch(disabledFactCategoriesProvider).valueOrNull ?? const <String>{};
+    if (cats.isEmpty) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.lightbulb_outline),
+          title: Text('Did You Know? facts'),
+          subtitle: Text('Loading fact packs…'),
+        ),
+      );
+    }
+    return Card(
+      child: Column(
+        children: [
+          for (final c in cats)
+            SwitchListTile(
+              title: Text('${c.emoji}  ${c.label}'),
+              subtitle: Text('${c.count} facts'),
+              value: !disabled.contains(c.key),
+              onChanged: (v) => _toggle(ref, c.key, v),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -377,6 +418,17 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => ref.read(tourControllerProvider.notifier).start(),
             ),
           ),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 4, 4, 4),
+            child: Text('Did You Know? facts', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 6),
+            child: Text('Advary shares these when there’s nothing about you to talk about — tap the orb, or check the Home card.',
+                style: TextStyle(fontSize: 12, color: Colors.white60)),
+          ),
+          const _FactCategoryToggles(),
           const SizedBox(height: 8),
           const Padding(
             padding: EdgeInsets.fromLTRB(4, 4, 4, 4),
