@@ -6,12 +6,15 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/format/dates.dart';
 import '../../core/settings/settings_repository.dart';
+import '../../core/widgets/otherable_chips.dart';
 import 'ledger_actions.dart';
 import 'ledger_models.dart';
 import 'ledger_repository.dart';
 
 class AddIncomeScreen extends ConsumerStatefulWidget {
-  const AddIncomeScreen({super.key});
+  const AddIncomeScreen({super.key, required this.date});
+
+  final DateTime date;
 
   @override
   ConsumerState<AddIncomeScreen> createState() => _AddIncomeScreenState();
@@ -22,8 +25,17 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
   final _amount = TextEditingController();
   final _notes = TextEditingController();
   String _sourceType = incomeSourceOptions.first.value; // 'salary'
-  DateTime _date = DateTime.now();
+  String? _customSource; // set when the user picks "Other" and types their own
+  late DateTime _date = widget.date;
   bool _busy = false;
+
+  String? _composedDescription() {
+    final parts = <String>[
+      if (_customSource != null && _customSource!.isNotEmpty) _customSource!,
+      if (_notes.text.trim().isNotEmpty) _notes.text.trim(),
+    ];
+    return parts.isEmpty ? null : parts.join(' — ');
+  }
 
   @override
   void dispose() {
@@ -51,10 +63,10 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
             amount: _amount.text.trim(),
             currency: currency,
             date: _date,
-            description: _notes.text,
+            description: _composedDescription(),
           );
       if (!mounted) return;
-      completeLedgerWrite(context, ref, 'Income added');
+      completeLedgerWrite(context, ref, kind: 'income');
     } on AppError catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -75,7 +87,7 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add income'),
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/add')),
+        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/date/${ymd(widget.date)}')),
       ),
       body: AbsorbPointer(
         absorbing: _busy,
@@ -96,13 +108,22 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
                 validator: _validateAmount,
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _sourceType,
-                decoration: const InputDecoration(labelText: 'Source'),
-                items: incomeSourceOptions
-                    .map((o) => DropdownMenuItem<String>(value: o.value, child: Text(o.label)))
-                    .toList(),
-                onChanged: (v) => setState(() => _sourceType = v ?? _sourceType),
+              const Text('Source'),
+              const SizedBox(height: 8),
+              OtherableChips(
+                options: incomeSourceOptions.map((o) => o.label).toList(),
+                initialValue: incomeSourceLabel(_sourceType),
+                onChanged: (value, isCustom) => setState(() {
+                  if (isCustom) {
+                    _customSource = value;
+                    _sourceType = 'other';
+                  } else {
+                    _customSource = null;
+                    _sourceType = incomeSourceOptions
+                        .firstWhere((o) => o.label == value, orElse: () => incomeSourceOptions.last)
+                        .value;
+                  }
+                }),
               ),
               const SizedBox(height: 16),
               TextFormField(

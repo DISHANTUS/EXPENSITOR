@@ -20,6 +20,11 @@ class NotificationPreferences(BaseModel):
     weekly_summary: bool = True
     planned_expense_reminders: bool = True
     monthly_report: bool = True
+    # Voice companion (4c-B polish; consumed by Sprint 5 TTS via greeting.spoken_text)
+    speak_greeting_on_open: bool = False
+    speak_reminders: bool = False
+    speak_celebrations: bool = True
+    voice_when_tapped_only: bool = False
 
 
 class UserSettingsRead(BaseModel):
@@ -32,7 +37,11 @@ class UserSettingsRead(BaseModel):
     monthly_income_estimate: Decimal | None
     starting_balance: Decimal
     preferred_ai_tone: AiTone
+    companion_style: str = "balanced"
+    voice_length: str = "normal"
+    companion_name: str | None = None
     notification_preferences: NotificationPreferences
+    currency_history: list[dict] | None = None
 
 
 class UserSettingsUpdate(BaseModel):
@@ -47,7 +56,32 @@ class UserSettingsUpdate(BaseModel):
     monthly_income_estimate: Money | None = None
     starting_balance: Money | None = None
     preferred_ai_tone: AiTone | None = None
+    companion_style: str | None = Field(default=None, max_length=20)
+    voice_length: str | None = Field(default=None, max_length=10)
+    companion_name: str | None = Field(default=None, max_length=40)
     notification_preferences: NotificationPreferences | None = None
+
+    @field_validator("companion_name")
+    @classmethod
+    def _clean_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        v = value.strip()
+        return v or None        # empty string clears the name
+
+    @field_validator("companion_style")
+    @classmethod
+    def _validate_style(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"balanced", "cheerful", "professional", "anime", "minimal"}:
+            raise ValueError("invalid companion_style")
+        return value
+
+    @field_validator("voice_length")
+    @classmethod
+    def _validate_voice_length(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"short", "normal", "detailed"}:
+            raise ValueError("invalid voice_length")
+        return value
 
     @field_validator("base_currency")
     @classmethod

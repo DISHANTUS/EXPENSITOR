@@ -50,6 +50,15 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
+  /// Remember (locally) that the first-launch tour has been seen, so the gate
+  /// doesn't re-trigger this session. The server is updated separately.
+  void markTourSeen() {
+    final u = state.user;
+    if (u != null && !u.hasSeenTour) {
+      state = state.copyWith(user: u.copyWith(hasSeenTour: true));
+    }
+  }
+
   /// Invoked by the API interceptor when refresh fails mid-session.
   void onSessionExpired() {
     state = const AuthState(status: AuthStatus.unauthenticated, error: 'Your session expired. Please log in again.');

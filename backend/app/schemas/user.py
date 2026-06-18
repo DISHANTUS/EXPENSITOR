@@ -15,4 +15,6 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str | None
     is_active: bool
+    is_developer: bool = False
+    has_seen_tour: bool = False
     created_at: datetime

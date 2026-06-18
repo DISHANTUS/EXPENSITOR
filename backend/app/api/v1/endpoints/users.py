@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, is_developer
 from app.schemas.settings import UserSettingsRead, UserSettingsUpdate
 from app.schemas.user import UserRead
 from app.services import settings_service
@@ -14,8 +14,14 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("/me", response_model=UserRead, summary="Get the current user")
-async def read_me(current_user: CurrentUser) -> UserRead:
-    return UserRead.model_validate(current_user)
+async def read_me(current_user: CurrentUser, db: DbSession) -> UserRead:
+    # Reflect the EFFECTIVE developer status (flag OR email allow-list) and whether
+    # the first-launch tour has been seen (drives the client onboarding gate).
+    s = await settings_service.get_settings(db, current_user.id)
+    return UserRead.model_validate(current_user).model_copy(update={
+        "is_developer": is_developer(current_user),
+        "has_seen_tour": s.tour_completed_at is not None,
+    })
 
 
 @router.get("/me/settings", response_model=UserSettingsRead, summary="Get current user settings")

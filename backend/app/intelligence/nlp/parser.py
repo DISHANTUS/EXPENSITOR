@@ -16,6 +16,7 @@ from app.intelligence.nlp import entities
 
 # intents
 ADD_EXPENSE = "add_expense"
+ADD_INCOME = "add_income"
 ADD_RECEIVABLE = "add_receivable"
 MARK_RECEIVABLE_RECEIVED = "mark_receivable_received"
 MOVE_EVENT = "move_event"
@@ -24,7 +25,7 @@ CREATE_SAVINGS_GOAL = "create_savings_goal"
 BUY_DECISION = "buy_decision"
 UNKNOWN = "unknown"
 
-MUTATING = {ADD_EXPENSE, ADD_RECEIVABLE, MARK_RECEIVABLE_RECEIVED, MOVE_EVENT,
+MUTATING = {ADD_EXPENSE, ADD_INCOME, ADD_RECEIVABLE, MARK_RECEIVABLE_RECEIVED, MOVE_EVENT,
             CHANGE_SAVINGS_TARGET, CREATE_SAVINGS_GOAL}
 
 _OCCASIONS = ("outing", "date", "trip", "vacation", "party", "birthday", "festival",
@@ -47,8 +48,14 @@ class ParseResult:
 def _classify(t: str) -> str:
     if re.search(r"\bmark\b.*\breceived\b", t) or re.search(r"\bgot\b.*\bback\b", t) or re.search(r"\breceived\b.*\bfrom\b", t):
         return MARK_RECEIVABLE_RECEIVED
+    if re.search(r"\b(lent|loaned)\b", t) or re.search(r"\bgave\s+(?:a\s+)?loan\b", t):
+        return ADD_RECEIVABLE                                   # I lent X -> X owes me
     if re.search(r"\bwill\s+(give|send|pay|transfer)\b", t) or re.search(r"\bowes?\b|\bexpecting\b", t):
         return ADD_RECEIVABLE
+    if (re.search(r"\b(gave me|paid me|got paid)\b", t)
+            or re.search(r"\b(received|got|earned)\b.*\b(salary|pay|income|bonus|refund|freelance)\b", t)
+            or re.search(r"\b(salary|income|bonus|refund)\b.*\b(came|arrived|credited|received|in)\b", t)):
+        return ADD_INCOME                                       # money I've already received
     if re.search(r"\b(move|reschedule|shift|postpone)\b", t):
         return MOVE_EVENT
     if re.search(r"\b(change|set|update|increase|decrease|raise|lower)\b.*\bsavings?\b.*\b(target|goal)\b", t) \
@@ -93,6 +100,10 @@ def parse(text: str, *, today: date, valid_category_names: set[str]) -> ParseRes
 
     if intent == ADD_EXPENSE:
         fields["category"] = entities.extract_category(raw, valid_category_names)
+        if amount is None:
+            missing.append("amount")
+    elif intent == ADD_INCOME:
+        fields["source_type"] = entities.extract_income_source_type(raw)
         if amount is None:
             missing.append("amount")
     elif intent == ADD_RECEIVABLE:

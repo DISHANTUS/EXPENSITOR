@@ -40,6 +40,23 @@ class LedgerRepository {
         description: description,
       ));
 
+  Future<void> createEvent({
+    required String title,
+    required String amount,
+    required String currency,
+    required DateTime date,
+    String? occasionType,
+    String? notes,
+  }) =>
+      _post('/planned-expenses', eventBody(
+        title: title,
+        amount: amount,
+        currency: currency,
+        date: date,
+        occasionType: occasionType,
+        notes: notes,
+      ));
+
   Future<List<CategoryOption>> categories() async {
     try {
       final res = await _dio.get<dynamic>('/categories');

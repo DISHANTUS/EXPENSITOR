@@ -5,11 +5,11 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.enums import RecoveryMode, SavingsGoalKind, SavingsGoalStatus
+from app.models.enums import ImportanceLevel, RecoveryMode, SavingsGoalKind, SavingsGoalStatus
 
 Money = Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=4)]
 
@@ -23,6 +23,9 @@ class SavingsGoalCreate(BaseModel):
     original_currency: str = Field(min_length=3, max_length=3)
     target_date: date | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    reason: str | None = None
+    importance: ImportanceLevel = ImportanceLevel.high
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -47,6 +50,9 @@ class SavingsGoalUpdate(BaseModel):
     target_date: date | None = None
     status: SavingsGoalStatus | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    reason: str | None = None
+    importance: ImportanceLevel | None = None
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -90,5 +96,8 @@ class SavingsGoalRead(BaseModel):
     carried_deficit: Decimal
     distribute_months: int | None
     notes: str | None
+    reason: str | None
+    importance: ImportanceLevel
+    ai_metadata: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime

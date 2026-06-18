@@ -15,7 +15,7 @@ from app.intelligence.projection.calendar_utils import add_months, clamp_day
 from app.models import Receivable, UserSettings
 from app.models.enums import ReceivableKind, ReceivableSourceType, ReceivableStatus
 from app.schemas.receivable import ReceivableCreate, ReceivableRead, ReceivableUpdate
-from app.services import companion_service, currency_service
+from app.services import companion_service, currency_service, person_service
 from app.services.exceptions import InvalidOperationError, ResourceNotFoundError
 
 _DEFAULT_RELIABILITY = {
@@ -73,6 +73,7 @@ def _to_read(r: Receivable, today: date) -> ReceivableRead:
         next_expected_date=_next_expected_date(r, today), reliability=r.reliability, notes=r.notes,
         expected_time_window=r.expected_time_window, expected_time=r.expected_time,
         received_at=r.received_at, last_follow_up_at=r.last_follow_up_at, follow_up_count=r.follow_up_count,
+        person_id=r.person_id, importance=r.importance, ai_metadata=r.ai_metadata,
         created_at=r.created_at, updated_at=r.updated_at,
     )
 
@@ -106,6 +107,7 @@ async def create(db: AsyncSession, user_id: uuid.UUID, data: ReceivableCreate) -
     settings = await _settings(db, user_id)
     today = _today_from_settings(settings)
     await currency_service.get_currency(db, data.original_currency)
+    await person_service.validate_person(db, user_id, data.person_id)
     rate, converted = await currency_service.convert_to_base(
         db, data.original_amount, data.original_currency, settings.base_currency
     )
@@ -118,6 +120,7 @@ async def create(db: AsyncSession, user_id: uuid.UUID, data: ReceivableCreate) -
         base_currency=settings.base_currency, expected_date=data.expected_date,
         recurrence_day=data.recurrence_day, reliability=reliability, notes=data.notes,
         expected_time_window=data.expected_time_window, expected_time=data.expected_time,
+        person_id=data.person_id, importance=data.importance, ai_metadata=data.ai_metadata,
     )
     db.add(row)
     await db.flush()
@@ -185,8 +188,12 @@ async def update(
             row.received_at = None
         row.status = new_status
 
+    if "person_id" in updates:
+        await person_service.validate_person(db, user_id, updates["person_id"])
+
     for field in ("title", "source_name", "source_type", "kind", "notes", "reliability",
-                  "recurrence_day", "expected_date", "expected_time_window", "expected_time"):
+                  "recurrence_day", "expected_date", "expected_time_window", "expected_time",
+                  "person_id", "importance", "ai_metadata"):
         if field in updates:
             setattr(row, field, updates[field])
 

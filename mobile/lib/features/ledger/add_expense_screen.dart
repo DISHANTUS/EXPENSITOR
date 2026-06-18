@@ -10,7 +10,9 @@ import 'ledger_actions.dart';
 import 'ledger_repository.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  const AddExpenseScreen({super.key});
+  const AddExpenseScreen({super.key, required this.date});
+
+  final DateTime date;
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -21,7 +23,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _amount = TextEditingController();
   final _notes = TextEditingController();
   String? _categoryId; // null => Uncategorized
-  DateTime _date = DateTime.now();
+  late DateTime _date = widget.date;
   bool _busy = false;
 
   @override
@@ -53,7 +55,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             description: _notes.text,
           );
       if (!mounted) return;
-      completeLedgerWrite(context, ref, 'Expense added');
+      completeLedgerWrite(context, ref, kind: 'expense');
     } on AppError catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -75,7 +77,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add expense'),
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/add')),
+        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/date/${ymd(widget.date)}')),
       ),
       body: AbsorbPointer(
         absorbing: _busy,

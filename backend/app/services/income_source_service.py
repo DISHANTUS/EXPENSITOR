@@ -14,7 +14,8 @@ from app.schemas.income_source import IncomeSourceCreate, IncomeSourceUpdate
 from app.services import currency_service, settings_service
 from app.services.exceptions import InvalidOperationError, ResourceNotFoundError
 
-_SIMPLE_FIELDS = ("label", "source_type", "kind", "reliability", "is_active", "expected_time_window", "expected_time")
+_SIMPLE_FIELDS = ("label", "source_type", "kind", "reliability", "is_active",
+                  "expected_time_window", "expected_time", "reason", "ai_metadata")
 
 
 async def _base_currency(db: AsyncSession, user_id: uuid.UUID) -> str:
@@ -56,6 +57,8 @@ async def create(db: AsyncSession, user_id: uuid.UUID, data: IncomeSourceCreate)
         is_active=data.is_active,
         expected_time_window=data.expected_time_window,
         expected_time=data.expected_time,
+        reason=data.reason,
+        ai_metadata=data.ai_metadata,
     )
     db.add(row)
     await db.commit()

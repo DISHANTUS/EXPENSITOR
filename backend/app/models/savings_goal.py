@@ -11,14 +11,16 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import RecoveryMode, SavingsGoalKind, SavingsGoalStatus
+from app.models.enums import ImportanceLevel, RecoveryMode, SavingsGoalKind, SavingsGoalStatus
 
 
 class SavingsGoal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -61,6 +63,16 @@ class SavingsGoal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     distribute_months: Mapped[int | None] = mapped_column(Integer)
 
     notes: Mapped[str | None] = mapped_column(Text)
+
+    # V2: why this goal matters (personalization) + importance + advisor metadata.
+    reason: Mapped[str | None] = mapped_column(Text)
+    importance: Mapped[ImportanceLevel] = mapped_column(
+        SAEnum(ImportanceLevel, name="importance_level", native_enum=False, create_constraint=False, length=20),
+        default=ImportanceLevel.high,
+        server_default=text("'high'"),
+        nullable=False,
+    )
+    ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

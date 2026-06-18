@@ -25,6 +25,7 @@ from app.models import Category, CompanionEvent, PlannedExpense, Receivable, Sav
 from app.models.enums import (
     CompanionEntityType,
     CompanionEventType,
+    IncomeSourceType,
     OccasionType,
     PlannedExpenseStatus,
     ReceivableStatus,
@@ -34,6 +35,7 @@ from app.models.enums import (
     SavingsGoalStatus,
 )
 from app.schemas.expense import ExpenseCreate
+from app.schemas.income import IncomeCreate
 from app.schemas.planned_expense import PlannedExpenseUpdate
 from app.schemas.receivable import ReceivableCreate
 from app.schemas.savings import SavingsGoalCreate, SavingsGoalUpdate
@@ -42,6 +44,7 @@ from app.services import (
     decision_service,
     event_service,
     expense_service,
+    income_service,
     planned_expense_service,
     preference_service,
     projection_service,
@@ -277,6 +280,8 @@ async def act(db: AsyncSession, user_id: uuid.UUID, *, text: str, confirm: bool 
 _PREVIEW_EFFECT = {
     nlp.ADD_EXPENSE: ("It would record this against today's budget.",
                       "Your upcoming plans and savings goals stay the same."),
+    nlp.ADD_INCOME: ("It would record this as income you've received, so your available budget goes up.",
+                     "Your spending plan and savings goals stay the same."),
     nlp.ADD_RECEIVABLE: ("It would add this to your expected income, so future planning accounts for it.",
                          "Nothing you've already planned changes."),
     nlp.MARK_RECEIVABLE_RECEIVED: ("It would mark this money as received.",
@@ -298,6 +303,7 @@ async def _preview(db, user_id, pr, fields, target, today) -> dict[str, Any]:
     cat = (f" ({fields['category']})" if fields.get("category") else "")
     summaries = {
         nlp.ADD_EXPENSE: lambda: f"Add a {amt} expense{cat} on {(fields.get('date') or today).isoformat()}.",
+        nlp.ADD_INCOME: lambda: f"Record {amt} income on {(fields.get('date') or today).isoformat()}.",
         nlp.ADD_RECEIVABLE: lambda: f"Track {amt} expected from {fields['source_name']}{on}.",
         nlp.MARK_RECEIVABLE_RECEIVED: lambda: f"Mark {target.source_name}'s {ph.money(target.converted_amount, cur)} as received.",
         nlp.MOVE_EVENT: lambda: f"Move '{target.title}' to {fields['date'].isoformat()}.",
@@ -329,6 +335,14 @@ async def _execute(db, user_id, pr, fields, target, today, request_id) -> dict[s
             cat_tail = f" ({fields['category']})" if fields.get("category") else ""
             summary = f"{ph.money(fields['amount'], currency)} expense added{cat_tail}."
             entity_type, entity_id = CompanionEntityType.expense, row.id
+        elif intent == nlp.ADD_INCOME:
+            stype = fields.get("source_type") or "other"
+            row = await income_service.create(db, user_id, IncomeCreate(
+                source_type=IncomeSourceType(stype), original_amount=fields["amount"],
+                original_currency=currency, received_date=fields.get("date") or today))
+            verified = await db.get(type(row), row.id) is not None
+            summary = f"{ph.money(fields['amount'], currency)} income recorded."
+            entity_type, entity_id = CompanionEntityType.income, row.id
         elif intent == nlp.ADD_RECEIVABLE:
             read = await receivables_service.create(db, user_id, ReceivableCreate(
                 title=f"From {fields['source_name']}", source_name=fields["source_name"],
@@ -388,6 +402,8 @@ def _why_for(intent, fields, target) -> str:
                 "I checked for conflicts, upcoming expenses, savings goals and expected income.")
     if intent == nlp.ADD_EXPENSE:
         return "I checked this against today's budget, your savings goals and upcoming plans."
+    if intent == nlp.ADD_INCOME:
+        return "I've recorded this income so your available budget and projections reflect it."
     if intent == nlp.ADD_RECEIVABLE:
         return "I've added this to your expected income so future planning accounts for it."
     return "I checked the whole-month picture, not just today."

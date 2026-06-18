@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
+    # Accounts that get developer-only tools (reset/demo). Belt-and-suspenders with
+    # the users.is_developer flag — either one grants access.
+    DEVELOPER_EMAILS: list[str] = ["advary2006@gmail.com"]
 
     # --- Security ---
     SECRET_KEY: str

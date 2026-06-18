@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import calendar as _cal
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DailyPlan, Expense, Income, PlannedExpense
-from app.models.enums import PlannedExpenseStatus
+from app.models import DailyPlan, Expense, Income, PlannedExpense, Receivable, RecurringRule, UserSettings
+from app.models.enums import PlannedExpenseStatus, ReceivableKind, ReceivableStatus
 from app.schemas.calendar import DayCell, DayDetail, MonthView
 from app.schemas.expense import ExpenseRead
 from app.schemas.income import IncomeRead
@@ -24,6 +25,12 @@ from app.schemas.planned_expense import PlannedExpenseRead
 from app.services import settings_service
 
 _ZERO = Decimal("0")
+
+
+async def user_today(db: AsyncSession, user_id: uuid.UUID) -> date:
+    """Today in the user's timezone (matches the advisor's notion of 'today')."""
+    tz = await db.scalar(select(UserSettings.timezone).where(UserSettings.user_id == user_id))
+    return datetime.now(ZoneInfo(tz or "UTC")).date()
 
 
 async def _settings(db: AsyncSession, user_id: uuid.UUID):
@@ -65,6 +72,74 @@ def markers_for(classification: str, income: Decimal, event_count: int) -> list[
     return markers
 
 
+# recurring_rule type -> marker key
+_RULE_MARKER = {
+    "subscription": "subscription",
+    "emi": "emi",
+    "loan": "emi",
+    "bill": "bill",
+    "insurance": "insurance",
+    "borrowed": "emi",
+}
+
+
+def _enum_val(v) -> str:
+    return v.value if hasattr(v, "value") else str(v)
+
+
+async def _extra_markers(
+    db: AsyncSession, user_id: uuid.UUID, start: date, end: date, today: date
+) -> dict[date, list[str]]:
+    """Per-day markers materialized from recurring_rules + receivables.
+    ``start``/``end`` are within a single month (month grid or one day)."""
+    out: dict[date, list[str]] = {}
+
+    def add(day: date, key: str) -> None:
+        bucket = out.setdefault(day, [])
+        if key not in bucket:
+            bucket.append(key)
+
+    def day_in_month(day_n: int) -> date | None:
+        try:
+            return date(start.year, start.month, day_n)
+        except ValueError:
+            return None  # e.g. day 31 in a 30-day month
+
+    rules = (
+        await db.execute(
+            select(RecurringRule.recurrence_day, RecurringRule.rule_type, RecurringRule.start_date).where(
+                RecurringRule.user_id == user_id,
+                RecurringRule.deleted_at.is_(None),
+                RecurringRule.is_active.is_(True),
+            )
+        )
+    ).all()
+    for recurrence_day, rule_type, rule_start in rules:
+        d = day_in_month(recurrence_day)
+        if d is None or d < start or d > end or (rule_start and d < rule_start):
+            continue
+        add(d, _RULE_MARKER.get(_enum_val(rule_type), "bill"))
+
+    receivables = (
+        await db.execute(
+            select(Receivable).where(Receivable.user_id == user_id, Receivable.deleted_at.is_(None))
+        )
+    ).scalars().all()
+    for r in receivables:
+        if r.status == ReceivableStatus.received and r.received_at is not None:
+            rd = r.received_at.date()
+            if start <= rd <= end:
+                add(rd, "returned")
+        elif r.status == ReceivableStatus.pending:
+            if r.kind == ReceivableKind.one_time and r.expected_date is not None and start <= r.expected_date <= end:
+                add(r.expected_date, "repay_overdue" if r.expected_date < today else "lent")
+            elif r.kind == ReceivableKind.recurring and r.recurrence_day is not None:
+                d = day_in_month(r.recurrence_day)
+                if d is not None and start <= d <= end:
+                    add(d, "lent")
+    return out
+
+
 async def _sum_by_day(db, model, date_col, amount_col, user_id, start, end) -> dict[date, Decimal]:
     result = await db.execute(
         select(date_col, func.coalesce(func.sum(amount_col), 0))
@@ -101,6 +176,7 @@ async def month_view(db: AsyncSession, user_id: uuid.UUID, year: int, month: int
         )
     )
     budget_by = {row[0]: row[1] for row in plan_result.all()}
+    extra = await _extra_markers(db, user_id, start, end, today)
 
     days: list[DayCell] = []
     for d in (date(year, month, n) for n in range(1, last_day + 1)):
@@ -119,7 +195,7 @@ async def month_view(db: AsyncSession, user_id: uuid.UUID, year: int, month: int
                 planned_budget=planned_budget,
                 effective_budget=effective,
                 classification=cls,
-                markers=markers_for(cls, income, event_count),
+                markers=markers_for(cls, income, event_count) + extra.get(d, []),
             )
         )
 
@@ -168,6 +244,7 @@ async def day_detail(db: AsyncSession, user_id: uuid.UUID, day: date, *, today: 
     effective = planned_budget if planned_budget is not None else _derived_budget(settings.monthly_threshold, day)
     remaining = (effective - spent) if effective is not None else None
     cls = classify(spent, effective, day, today)
+    extra = await _extra_markers(db, user_id, day, day, today)
 
     return DayDetail(
         date=day,
@@ -178,7 +255,7 @@ async def day_detail(db: AsyncSession, user_id: uuid.UUID, day: date, *, today: 
         income=income,
         remaining=remaining,
         classification=cls,
-        markers=markers_for(cls, income, len(ev_rows)),
+        markers=markers_for(cls, income, len(ev_rows)) + extra.get(day, []),
         overspend_reason=plan.overspend_reason if plan else None,
         expenses=[ExpenseRead.model_validate(e) for e in exp_rows],
         incomes=[IncomeRead.model_validate(i) for i in inc_rows],

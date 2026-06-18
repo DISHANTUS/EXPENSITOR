@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import OccasionType, PlannedExpensePriority, PlannedExpenseStatus
+from app.models.enums import ImportanceLevel, OccasionType, PlannedExpensePriority, PlannedExpenseStatus
 
 if TYPE_CHECKING:
     from app.models.category import Category
@@ -86,6 +86,15 @@ class PlannedExpense(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     converted_expense_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("expenses.id", ondelete="SET NULL")
     )
+
+    # V2: significance (drives timeline/mood priority) + standardized advisor metadata.
+    importance: Mapped[ImportanceLevel] = mapped_column(
+        SAEnum(ImportanceLevel, name="importance_level", native_enum=False, create_constraint=False, length=20),
+        default=ImportanceLevel.medium,
+        server_default=text("'medium'"),
+        nullable=False,
+    )
+    ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # Soft delete keeps history intact for future offline sync.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

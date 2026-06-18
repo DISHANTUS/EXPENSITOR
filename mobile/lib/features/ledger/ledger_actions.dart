@@ -2,23 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/companion/reaction.dart';
+import '../../core/companion/reaction_queue.dart';
+import '../calendar/calendar_repository.dart';
 import '../home/dashboard_repository.dart';
 import 'ledger_repository.dart';
 
-/// Re-fetch everything a new expense/income affects.
-void refreshDashboardAndHistory(WidgetRef ref) {
+/// Re-fetch everything a new expense/income/event affects: the dashboard
+/// commentary, the calendar month grid, and every day-detail view.
+void refreshAfterWrite(WidgetRef ref) {
+  ref.invalidate(dailyBriefProvider);
   ref.invalidate(financialHealthProvider);
   ref.invalidate(proactiveFeedProvider);
-  ref.invalidate(dailyBriefProvider);
   ref.invalidate(recentTransactionsProvider);
+  ref.invalidate(monthViewProvider);
+  ref.invalidate(dayDetailProvider);
 }
 
-/// Success flow shared by both forms: refresh the dashboard + history, confirm
-/// with a snackbar, and return to Home. The messenger is captured before
-/// navigating so the snackbar survives the route change.
-void completeLedgerWrite(BuildContext context, WidgetRef ref, String message) {
-  final messenger = ScaffoldMessenger.of(context);
-  refreshDashboardAndHistory(ref);
-  messenger.showSnackBar(SnackBar(content: Text(message)));
+/// Success flow shared by the add forms: refresh, push a companion reaction
+/// (shown over the greeting), and return to Home.
+void completeLedgerWrite(BuildContext context, WidgetRef ref, {required String kind, String? goalLabel}) {
+  refreshAfterWrite(ref);
+  ref.read(reactionQueueProvider.notifier).push(reactionFor(kind, label: goalLabel));
   context.go('/home');
 }

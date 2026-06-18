@@ -12,6 +12,7 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.models.category import Category
     from app.models.expense import Expense
+    from app.models.financial_profile import FinancialProfile
     from app.models.income import Income
     from app.models.income_source import IncomeSource
     from app.models.planned_expense import PlannedExpense
@@ -29,8 +30,15 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
+    # Gates developer-only tools (reset/demo). Email allow-list is the fallback.
+    is_developer: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
 
     settings: Mapped[UserSettings] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    financial_profile: Mapped[FinancialProfile | None] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(

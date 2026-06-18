@@ -1,21 +1,34 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_state.dart';
+import '../voice/voice_service.dart';
+import '../../features/advisor/chat_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/budget_setup/budget_setup_screen.dart';
+import '../../features/contact/contact_screen.dart';
+import '../../features/convert/currency_center_screen.dart';
+import '../../features/date_details/date_details_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/ledger/add_event_screen.dart';
 import '../../features/ledger/add_expense_screen.dart';
-import '../../features/ledger/add_hub_screen.dart';
 import '../../features/ledger/add_income_screen.dart';
-import '../../features/ledger/history_screen.dart';
-import '../../features/profile/profile_screen.dart';
-import '../../features/shell/app_shell.dart';
+import '../../features/ledger/add_lent_screen.dart';
+import '../../features/placeholders/placeholder_screen.dart';
+import '../../features/plan_today/plan_today_screen.dart';
+import '../../features/settings/settings_screen.dart';
+import '../../features/future_me/future_me_screen.dart';
+import '../../features/relationships/relationship_detail_screen.dart';
+import '../../features/relationships/relationships_screen.dart';
 import '../../features/splash/splash_screen.dart';
+import '../../features/timeline/timeline_screen.dart';
+
+DateTime _parseDate(GoRouterState state) =>
+    DateTime.tryParse(state.pathParameters['date'] ?? '') ?? DateTime.now();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  // Bridge Riverpod auth changes -> GoRouter refresh.
   final refresh = ValueNotifier<int>(0);
   ref.listen(authControllerProvider, (_, __) => refresh.value++);
   ref.onDispose(refresh.dispose);
@@ -23,6 +36,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
     refreshListenable: refresh,
+    observers: [_VoiceStopObserver(ref)],   // interruption: stop speech on navigation
     redirect: (context, state) => resolveRedirect(
       status: ref.read(authControllerProvider).status,
       location: state.matchedLocation,
@@ -30,34 +44,56 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      // Authenticated app frame: bottom-nav shell with four branches.
-      StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            AppShell(navigationShell: navigationShell),
-        branches: [
-          StatefulShellBranch(
-            routes: [GoRoute(path: '/home', builder: (_, __) => const HomeScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/add',
-                builder: (_, __) => const AddHubScreen(),
-                routes: [
-                  GoRoute(path: 'expense', builder: (_, __) => const AddExpenseScreen()),
-                  GoRoute(path: 'income', builder: (_, __) => const AddIncomeScreen()),
-                ],
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [GoRoute(path: '/history', builder: (_, __) => const HistoryScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen())],
-          ),
+      GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+      GoRoute(path: '/plan-today', builder: (_, __) => const PlanTodayScreen()),
+      GoRoute(path: '/contact', builder: (_, __) => const ContactScreen()),
+      GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/convert', builder: (_, __) => const CurrencyCenterScreen()),
+      GoRoute(path: '/budget-setup', builder: (_, __) => const BudgetSetupScreen()),
+      GoRoute(path: '/advisor', builder: (_, __) => const ChatScreen()),
+      GoRoute(path: '/timeline', builder: (_, __) => const TimelineScreen()),
+      GoRoute(path: '/future-me', builder: (_, __) => const FutureMeScreen()),
+      GoRoute(path: '/relationships', builder: (_, __) => const RelationshipsScreen()),
+      GoRoute(path: '/relationship/:name',
+          builder: (_, state) => RelationshipDetailScreen(name: state.pathParameters['name'] ?? '')),
+      GoRoute(
+        path: '/feedback',
+        builder: (_, __) => const PlaceholderScreen(
+          title: 'Feedback',
+          icon: Icons.feedback_outlined,
+          message: 'Send-feedback arrives in Sprint 4.',
+        ),
+      ),
+      GoRoute(
+        path: '/date/:date',
+        builder: (_, state) => DateDetailsScreen(date: _parseDate(state)),
+        routes: [
+          GoRoute(path: 'add-expense', builder: (_, state) => AddExpenseScreen(date: _parseDate(state))),
+          GoRoute(path: 'add-income', builder: (_, state) => AddIncomeScreen(date: _parseDate(state))),
+          GoRoute(path: 'add-event', builder: (_, state) => AddEventScreen(date: _parseDate(state))),
+          GoRoute(path: 'add-lent', builder: (_, state) => AddLentScreen(date: _parseDate(state))),
         ],
       ),
     ],
   );
 });
+
+/// Stops any in-progress companion speech whenever the user navigates — voice is
+/// always interruptible (Sprint 5a).
+class _VoiceStopObserver extends NavigatorObserver {
+  _VoiceStopObserver(this._ref);
+  final Ref _ref;
+
+  void _stop() {
+    try {
+      _ref.read(voiceControllerProvider.notifier).stop();
+    } catch (_) {/* voice not initialised yet */}
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _stop();
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _stop();
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _stop();
+}

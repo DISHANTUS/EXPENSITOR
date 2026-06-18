@@ -1,4 +1,5 @@
 import 'package:expensitor_mobile/core/auth/auth_state.dart';
+import 'package:expensitor_mobile/core/format/dates.dart';
 import 'package:expensitor_mobile/features/ledger/ledger_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -114,17 +115,46 @@ void main() {
     expect(merged.last.isCredit, isFalse);
   });
 
-  group('resolveRedirect covers the new shell routes', () {
-    test('authenticated stays on add/history/profile (no redirect)', () {
-      for (final loc in ['/home', '/add', '/add/expense', '/add/income', '/history', '/profile']) {
-        expect(resolveRedirect(status: AuthStatus.authenticated, location: loc), isNull,
-            reason: loc);
+  group('eventBody', () {
+    test('builds planned-expense body with occasion + notes', () {
+      final body = eventBody(
+        title: '  Outing  ',
+        amount: '1500',
+        currency: 'inr',
+        date: DateTime(2026, 9, 27),
+        occasionType: 'outing',
+        notes: '  with friends  ',
+      );
+      expect(body, {
+        'title': 'Outing',
+        'planned_date': '2026-09-27',
+        'original_amount': '1500',
+        'original_currency': 'INR',
+        'occasion_type': 'outing',
+        'notes': 'with friends',
+      });
+    });
+
+    test('omits occasion + notes when empty', () {
+      final body = eventBody(title: 'Trip', amount: '900', currency: 'INR', date: DateTime(2026, 1, 1));
+      expect(body.containsKey('occasion_type'), isFalse);
+      expect(body.containsKey('notes'), isFalse);
+    });
+  });
+
+  group('resolveRedirect covers the V2 routes', () {
+    test('authenticated stays on every V2 route (no redirect)', () {
+      for (final loc in [
+        '/home', '/plan-today', '/budget-setup', '/advisor', '/convert', '/feedback',
+        '/contact', '/date/2026-06-17', '/date/2026-06-17/add-expense',
+      ]) {
+        expect(resolveRedirect(status: AuthStatus.authenticated, location: loc), isNull, reason: loc);
       }
     });
 
-    test('unauthenticated is bounced to login from any shell route', () {
-      expect(resolveRedirect(status: AuthStatus.unauthenticated, location: '/history'), '/login');
-      expect(resolveRedirect(status: AuthStatus.unauthenticated, location: '/add/expense'), '/login');
+    test('unauthenticated is bounced to login from any route', () {
+      expect(resolveRedirect(status: AuthStatus.unauthenticated, location: '/home'), '/login');
+      expect(resolveRedirect(status: AuthStatus.unauthenticated, location: '/date/2026-06-17'), '/login');
     });
   });
 }

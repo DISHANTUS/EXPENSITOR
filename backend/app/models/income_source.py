@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
@@ -21,10 +21,12 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     Time,
     text,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -90,6 +92,10 @@ class IncomeSource(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
+
+    # V2: why this income matters (personalization) + standardized advisor metadata.
+    reason: Mapped[str | None] = mapped_column(Text)
+    ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # Soft delete: excluded from normal queries; preserved for history/sync.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

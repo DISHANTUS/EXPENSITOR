@@ -11,6 +11,28 @@ from app.models import Category
 from app.services.exceptions import InvalidOperationError
 
 
+async def create_for_user(
+    db: AsyncSession, user_id: uuid.UUID, *, name: str, icon: str | None = None,
+    color: str | None = None, is_essential: bool = False,
+) -> Category:
+    """Create a user-owned category. Idempotent by name: if the user already has
+    one with this name (or a system category matches), return that instead of
+    erroring — so repeating an 'Other → specify' value reuses the same category."""
+    existing = await db.scalar(
+        select(Category).where(
+            Category.name == name,
+            or_(Category.user_id == user_id, Category.user_id.is_(None)),
+        ).limit(1)
+    )
+    if existing is not None:
+        return existing
+    row = Category(user_id=user_id, name=name, icon=icon, color=color, is_system=False, is_essential=is_essential)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
 async def list_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Category]:
     """Categories the user can pick: system categories (user_id NULL) plus any
     they own. System categories first, then alphabetical."""

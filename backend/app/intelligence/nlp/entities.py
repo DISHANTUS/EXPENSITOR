@@ -20,6 +20,11 @@ _CURRENCY_AMT = re.compile(r"(₹|rs\.?|inr|\$|€|£|¥)\s*([\d][\d,]*(?:\.\d+)
 _KEYWORD_AMT = re.compile(
     r"(?:for|of|spend|spent|save|saving|target|give|gave|send|sent|pay|paid|add|added|costs?|worth)\s+"
     r"(?:₹|rs\.?|inr)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|lakh|lakhs)?", re.I)
+# "gave me 10000", "lent Ravi 5000", "will give him 15000" — an object sits between
+# the verb and the amount.
+_VERB_OBJ_AMT = re.compile(
+    r"(?:gave|give|lent|loaned|sent|send|paid|pay|owes?|transfer(?:red)?|earned|received|got)\s+"
+    r"(?:\w+\s+){0,2}(?:₹|rs\.?|inr)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|lakh|lakhs)?", re.I)
 _ORDINAL = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)\b", re.I)
 
 
@@ -38,11 +43,12 @@ def extract_amount(text: str) -> tuple[Decimal | None, str | None]:
     if m:
         return _to_decimal(m.group(2), m.group(3)), _CUR_SYMBOL.get(m.group(1).lower(), "INR")
     # avoid matching an ordinal day ("the 7th") as an amount
-    for km in _KEYWORD_AMT.finditer(text):
-        span = km.span(1)
-        if _ORDINAL.search(text[max(0, span[0] - 2):span[1] + 3]):
-            continue
-        return _to_decimal(km.group(1), km.group(2)), None
+    for pat in (_KEYWORD_AMT, _VERB_OBJ_AMT):
+        for km in pat.finditer(text):
+            span = km.span(1)
+            if _ORDINAL.search(text[max(0, span[0] - 2):span[1] + 3]):
+                continue
+            return _to_decimal(km.group(1), km.group(2)), None
     return None, None
 
 
@@ -154,10 +160,12 @@ _RELATIONS = {"father": "family", "dad": "family", "mother": "family", "mom": "f
 
 def extract_source(text: str) -> tuple[str | None, str | None]:
     """Return (source_name, source_type) for receivable-style inflows."""
+    # "I lent/loaned Ravi 5000" -> the person is the OBJECT (they owe me).
+    lent = re.search(r"\b(?:lent|loaned|lend)\s+(?:to\s+)?(\w+)", text, re.I)
     m = re.search(r"\b(\w+)\s+(?:will\s+)?(?:give|gave|send|sent|pay|paid|transfer|owes?)\b", text, re.I)
     poss = re.search(r"\b(\w+)'s\b", text)
-    token = (m.group(1) if m else (poss.group(1) if poss else None))
-    if not token:
+    token = (lent.group(1) if lent else (m.group(1) if m else (poss.group(1) if poss else None)))
+    if not token or token.lower() in ("me", "back"):
         return None, None
     low = token.lower()
     if low in _RELATIONS:
@@ -165,6 +173,28 @@ def extract_source(text: str) -> tuple[str | None, str | None]:
     if low in ("salary", "freelance", "refund"):
         return token.capitalize(), low
     return token.capitalize(), "friend"
+
+
+_INCOME_TYPE_PATTERNS = [
+    (r"\b(salary|paycheck|wages?|got paid|my pay)\b", "salary"),
+    (r"\bfreelance\b", "freelance"),
+    (r"\bbonus\b", "bonus"),
+    (r"\bbusiness\b", "business"),
+    (r"\brefund\b", "refund"),
+    (r"\bgift\b", "gift"),
+]
+
+
+def extract_income_source_type(text: str) -> str:
+    """Map an income utterance to an IncomeSourceType value (money from a person
+    reads as a 'gift'). Defaults to 'other' — never guesses an amount/date."""
+    t = text.lower()
+    for pat, val in _INCOME_TYPE_PATTERNS:
+        if re.search(pat, t):
+            return val
+    if re.search(r"\b(father|dad|mother|mom|brother|sister|family|friend|uncle|aunt|grandma|grandpa)\b", t):
+        return "gift"
+    return "other"
 
 
 def extract_reason_context(text: str) -> str | None:

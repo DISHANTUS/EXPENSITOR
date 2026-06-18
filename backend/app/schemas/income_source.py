@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -38,6 +38,8 @@ class IncomeSourceCreate(BaseModel):
     expected_date: date | None = None
     expected_time_window: ExpectedTimeWindow | None = None
     expected_time: time | None = None
+    reason: str | None = None
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -74,6 +76,8 @@ class IncomeSourceUpdate(BaseModel):
     expected_date: date | None = None
     expected_time_window: ExpectedTimeWindow | None = None
     expected_time: time | None = None
+    reason: str | None = None
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -99,6 +103,8 @@ class IncomeSourceRead(BaseModel):
     is_active: bool
     expected_time_window: ExpectedTimeWindow | None
     expected_time: time | None
+    reason: str | None
+    ai_metadata: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
 

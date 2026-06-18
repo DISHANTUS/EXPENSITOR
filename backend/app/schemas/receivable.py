@@ -5,11 +5,17 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.enums import ExpectedTimeWindow, ReceivableKind, ReceivableSourceType, ReceivableStatus
+from app.models.enums import (
+    ExpectedTimeWindow,
+    ImportanceLevel,
+    ReceivableKind,
+    ReceivableSourceType,
+    ReceivableStatus,
+)
 
 Money = Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=4)]
 Reliability = Annotated[Decimal, Field(ge=0, le=1, max_digits=4, decimal_places=3)]
@@ -30,6 +36,9 @@ class ReceivableCreate(BaseModel):
     recurrence_day: int | None = Field(default=None, ge=1, le=31)
     expected_time_window: ExpectedTimeWindow | None = None
     expected_time: time | None = None
+    person_id: uuid.UUID | None = None
+    importance: ImportanceLevel = ImportanceLevel.medium
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -65,6 +74,9 @@ class ReceivableUpdate(BaseModel):
     expected_time_window: ExpectedTimeWindow | None = None
     expected_time: time | None = None
     status: ReceivableStatus | None = None
+    person_id: uuid.UUID | None = None
+    importance: ImportanceLevel | None = None
+    ai_metadata: dict[str, Any] | None = None
 
     @field_validator("original_currency")
     @classmethod
@@ -102,5 +114,8 @@ class ReceivableRead(BaseModel):
     received_at: datetime | None
     last_follow_up_at: datetime | None
     follow_up_count: int
+    person_id: uuid.UUID | None
+    importance: ImportanceLevel
+    ai_metadata: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime

@@ -25,7 +25,7 @@ from app.schemas.savings import RecoveryIn, SavingsGoalCreate, SavingsGoalUpdate
 from app.services import behavior_service, currency_service, projection_service, settings_service
 from app.services.exceptions import InvalidOperationError, ResourceNotFoundError
 
-_PLAIN_FIELDS = ("name", "target_date", "status", "notes")
+_PLAIN_FIELDS = ("name", "target_date", "status", "notes", "reason", "importance", "ai_metadata")
 
 
 async def _base_currency(db: AsyncSession, user_id: uuid.UUID) -> str:
@@ -45,7 +45,7 @@ async def create(db: AsyncSession, user_id: uuid.UUID, data: SavingsGoalCreate, 
         original_amount=data.original_amount, original_currency=data.original_currency,
         exchange_rate=rate, converted_amount=converted, base_currency=base_currency,
         target_date=data.target_date, start_date=anchor.replace(day=1), status=SavingsGoalStatus.active,
-        notes=data.notes,
+        notes=data.notes, reason=data.reason, importance=data.importance, ai_metadata=data.ai_metadata,
     )
     db.add(row)
     await db.commit()

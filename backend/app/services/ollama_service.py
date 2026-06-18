@@ -11,14 +11,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import zlib
+from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
 from app.intelligence.commentary.ollama import adapter, narrator
+from app.intelligence.mood import greeting_narration
 
 log = logging.getLogger("expensitor.ollama")
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_SIMILARITY_THRESHOLD = 0.85
 
 # Observability only (process-local; not analytics, no dashboards) — B8.
 _METRICS: dict[str, int] = {
@@ -66,6 +72,69 @@ async def _generate(messages: list[dict[str, str]]) -> str:
         return resp.json().get("message", {}).get("content", "")
 
     return await asyncio.wait_for(_call(), timeout=settings.OLLAMA_TIMEOUT_SECONDS)
+
+
+def _make_generate(*, temperature: float, seed: int):
+    """A generate fn with greeting-friendly variety (higher temp, varying seed),
+    that strips any <think> reasoning a thinking model (e.g. qwen3) may emit."""
+    async def gen(messages: list[dict[str, str]]) -> str:
+        client = _get_client()
+
+        async def _call() -> str:
+            resp = await client.post(
+                f"{settings.OLLAMA_BASE_URL}/api/chat",
+                json={"model": settings.OLLAMA_MODEL, "messages": messages, "stream": False,
+                      "options": {"temperature": temperature, "seed": seed}},
+            )
+            resp.raise_for_status()
+            content = resp.json().get("message", {}).get("content", "")
+            return _THINK_RE.sub("", content).strip()
+
+        return await asyncio.wait_for(_call(), timeout=settings.OLLAMA_TIMEOUT_SECONDS)
+
+    return gen
+
+
+def _too_similar(text: str, recents: list[str]) -> bool:
+    low = (text or "").lower()
+    return any(SequenceMatcher(None, low, (r or "").lower()).ratio() >= _SIMILARITY_THRESHOLD
+               for r in recents if r)
+
+
+async def narrate_greeting(salutation: str, lines: list[str], *, style: str | None = None,
+                           recent_texts: list[str] | None = None, generate=None) -> dict[str, Any]:
+    """Rephrase a deterministic greeting via Ollama (rephrase-only, grounded).
+    Returns {ok, status, text, source}. Falls back to deterministic on
+    disabled/timeout/error/validation/too-similar — caller keeps the template."""
+    if generate is None and not settings.OLLAMA_ENABLED:
+        return {"ok": False, "status": "disabled", "text": None, "source": "deterministic"}
+    style = style or settings.OLLAMA_NARRATION_STYLE
+    recents = recent_texts or []
+    req = greeting_narration.build_request(lines, style=style)
+    _METRICS["attempts"] += 1
+    base_seed = zlib.crc32(req.paragraphs[0].encode("utf-8"))
+
+    def _compose(body: str) -> str:
+        # Prepend the verbatim time salutation — never narrated, never reworded.
+        return f"{salutation} {body}".strip() if salutation else body
+
+    # Initial attempt + one regeneration if too similar to recent greetings.
+    for attempt in range(2):
+        gen = generate or _make_generate(temperature=0.7, seed=base_seed + attempt)
+        result = await narrator.narrate(req, generate=gen)
+        if not result.ok:
+            _METRICS[result.status] = _METRICS.get(result.status, 0) + 1
+            _METRICS["fallback"] += 1
+            log.debug("greeting narration fallback: status=%s reason=%s offending=%s",
+                      result.status, result.reason, list(result.offending_tokens))
+            return {"ok": False, "status": result.status, "text": None, "source": "deterministic"}
+        full = _compose(result.text)
+        if not _too_similar(full, recents):
+            _METRICS["success"] += 1
+            return {"ok": True, "status": "success", "text": full, "source": "ollama"}
+    # Both attempts looked like recent greetings — fall back to keep it fresh.
+    _METRICS["fallback"] += 1
+    return {"ok": False, "status": "too_similar", "text": None, "source": "deterministic"}
 
 
 async def narrate_commentary(commentary: dict[str, Any], *, style: str | None = None, generate=None) -> dict[str, Any]:

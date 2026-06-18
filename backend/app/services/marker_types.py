@@ -59,6 +59,11 @@ _DEFS: list[tuple[str, str, str, str, str, str]] = [
     ("outing", "❤️", "#EC407A", "Outing", "planning", "{title} outing planned."),
     ("birthday", "🎂", "#FFB300", "Birthday", "planning", "{title}."),
     ("celebration", "🎉", "#FDD835", "Celebration", "planning", "{title}."),
+    ("gift", "🎁", "#D81B60", "Gift", "planning", "A gift you're planning."),
+    ("surprise_gift", "🤫", "#AB47BC", "Surprise gift", "planning", "A surprise gift — kept under wraps. {title}."),
+    ("anniversary", "💞", "#EC407A", "Anniversary", "planning", "{title}."),
+    ("graduation", "🎓", "#26A69A", "Graduation", "planning", "{title}."),
+    ("festival", "🪔", "#FF7043", "Festival", "planning", "{title}."),
     ("goal_milestone", "🎯", "#26C6DA", "Goal milestone", "planning", "Goal milestone reached."),
     ("goal_completed", "🏁", "#43A047", "Goal completed", "planning", "Goal completed — well done."),
     # --- advisor (S4) ---

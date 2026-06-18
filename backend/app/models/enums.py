@@ -201,3 +201,134 @@ class RejectionReason(str, enum.Enum):
     dislike_approach = "dislike_approach"
     too_much_effort = "too_much_effort"
     other = "other"
+
+
+class RelationshipType(str, enum.Enum):
+    """How a Person relates to the user (V2 relationship memory)."""
+
+    friend = "friend"
+    family = "family"
+    partner = "partner"
+    coworker = "coworker"
+    other = "other"
+
+
+class RecurringRuleType(str, enum.Enum):
+    """A recurring financial commitment (V2 calendar materialization)."""
+
+    subscription = "subscription"
+    emi = "emi"
+    loan = "loan"
+    bill = "bill"
+    insurance = "insurance"
+    borrowed = "borrowed"  # money the user borrowed and repays periodically
+
+
+class ImportanceLevel(str, enum.Enum):
+    """Significance of an event/memory — drives retention, timeline, mood priority."""
+
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+    life_milestone = "life_milestone"
+
+
+class AdviceKind(str, enum.Enum):
+    """What the companion said, so it can come back and ask what happened (4b-5)."""
+
+    forecast = "forecast"            # a goal ETA / what-if projection
+    relationship = "relationship"   # lending / repayment advice
+    recommendation = "recommendation"  # a lever (reduce category, cancel sub, save more)
+    budget = "budget"               # a monthly budget intention
+    reflection = "reflection"       # a month-end reflection prompt (4b-5b)
+    success = "success"             # a streak / win worth remembering (4b-5b)
+
+
+class AdviceStatus(str, enum.Enum):
+    """Lifecycle of a tracked piece of advice."""
+
+    pending = "pending"     # recorded, no follow-up due yet
+    due = "due"             # follow-up is due to be asked
+    answered = "answered"   # the user told us what happened (-> Outcome)
+    resolved = "resolved"   # derived/closed without a question
+    expired = "expired"     # window passed without an answer
+
+
+class LessonStatus(str, enum.Enum):
+    """Life-lesson lifecycle (4b-5b). Never auto-deleted; `forgotten` is reversible."""
+
+    active = "active"        # seen once
+    confirmed = "confirmed"  # recurred (>=2) — trusted enough to surface
+    archived = "archived"    # no recurrence in a long time (kept for the timeline)
+    forgotten = "forgotten"  # user asked to forget it (restorable)
+
+
+class LessonConfidence(str, enum.Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class AchievementType(str, enum.Enum):
+    """A win worth remembering (4b-5b). One good day is NOT one of these."""
+
+    first_salary = "first_salary"
+    goal_completed = "goal_completed"
+    debt_cleared = "debt_cleared"
+    goal_milestone = "goal_milestone"      # e.g. 25/50/75% of a goal
+    savings_streak = "savings_streak"      # N consecutive months on target
+    loan_repaid = "loan_repaid"            # someone repaid the user
+
+
+class PredictionAccuracyBand(str, enum.Enum):
+    accurate = "accurate"
+    partial = "partial"
+    inaccurate = "inaccurate"
+    pending = "pending"     # not enough elapsed/actual yet to judge
+
+
+# --- Financial profile (Budget Intelligence System) ---------------------------
+# Who the user is / how they live. Drives profile-specific country baselines and
+# the realistic budget engine. All VARCHAR-backed and freely editable later.
+
+
+class LifeStage(str, enum.Enum):
+    middle_school = "middle_school"
+    high_school = "high_school"
+    ug_student = "ug_student"
+    pg_student = "pg_student"
+    scholarship_student = "scholarship_student"
+    working_professional = "working_professional"
+    self_employed = "self_employed"
+    business_owner = "business_owner"
+    other = "other"
+
+
+class LivingSituation(str, enum.Enum):
+    with_parents = "with_parents"
+    with_partner = "with_partner"
+    with_friends = "with_friends"
+    alone = "alone"
+    dormitory = "dormitory"
+    other = "other"
+
+
+class FoodSituation(str, enum.Enum):
+    home_cooked = "home_cooked"
+    mostly_outside = "mostly_outside"
+    mix = "mix"
+
+
+class TransportMode(str, enum.Enum):
+    walk = "walk"
+    bicycle = "bicycle"
+    bus = "bus"
+    train = "train"
+    mixed = "mixed"
+
+
+class TuitionResponsibility(str, enum.Enum):
+    self_paid = "self_paid"
+    none = "none"
+    scholarship_covered = "scholarship_covered"

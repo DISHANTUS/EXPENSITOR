@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models import User
@@ -55,3 +56,17 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def is_developer(user: User) -> bool:
+    """Developer access = the is_developer flag OR the email allow-list (fallback)."""
+    return bool(user.is_developer) or user.email.lower() in {e.lower() for e in settings.DEVELOPER_EMAILS}
+
+
+async def require_developer(current_user: CurrentUser) -> User:
+    if not is_developer(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Developer access required")
+    return current_user
+
+
+RequireDeveloper = Annotated[User, Depends(require_developer)]

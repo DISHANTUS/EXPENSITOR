@@ -83,8 +83,11 @@ def extract_facts(text: str) -> dict[str, set]:
         times.add("12:00" if m.group(1).lower() == "noon" else "00:00")
     # numbers: strip the spans already classified, so dates/money/times don't leak in
     work = text
-    for rx in (_MONEY_RE, _CUR_RE, _PERCENT_RE, _ISO_RE, _MONTHDAY_RE, _TIME12_RE, _TIME24_RE):
+    for rx in (_MONEY_RE, _CUR_RE, _PERCENT_RE, _ISO_RE, _TIME12_RE, _TIME24_RE):
         work = rx.sub(" ", work)
+    # Only strip REAL month-day spans ("Jun 7"); keep "Your 12-day" so its number
+    # ("12") stays grounded — otherwise a streak/count could be altered undetected.
+    work = _MONTHDAY_RE.sub(lambda m: " " if _MONTH_NUM.get(m.group(1).lower()) else m.group(0), work)
     numbers = {_norm_amt(m.group(1)) for m in _NUMBER_RE.finditer(work)}
     caps = {m.group(1) for m in _CAP_RE.finditer(text)}
     return {"money": money, "percent": percent, "date": dates, "time": times,
@@ -120,6 +123,12 @@ class GroundingSpec:
     ordered_items: tuple[str, ...] = ()                          # list items that must keep order+count
     severity: str = "info"
     version: str = "1.0"
+    # Greetings (4c-B2) are casual prose: allow new non-fact words ("Hey", "Nice")
+    # while money/number/date/percent/time stay strictly grounded both ways.
+    allow_new_entities: bool = False
+    # Greetings span several short sentences; the model may re-flow line breaks.
+    # Facts still matter, paragraph structure doesn't — so allow opting out.
+    enforce_paragraph_count: bool = True
 
 
 @dataclass(frozen=True)
@@ -154,7 +163,7 @@ def validate(narrated_text: str, spec: GroundingSpec) -> GuardResult:
         return GuardResult(False, "empty")
 
     paras = _split_paragraphs(text)
-    if len(paras) != spec.paragraph_count:
+    if spec.enforce_paragraph_count and len(paras) != spec.paragraph_count:
         return GuardResult(False, "paragraph_count", (f"{len(paras)}!={spec.paragraph_count}",))
 
     nf = extract_facts(text)
@@ -164,9 +173,10 @@ def validate(narrated_text: str, spec: GroundingSpec) -> GuardResult:
         extra = nf[cat] - spec.allowed.get(cat, set())
         if extra:
             return GuardResult(False, f"added_{cat}", tuple(sorted(str(x) for x in extra)))
-    extra_caps = {c for c in nf["caps"] if c.lower() not in _CAP_ALLOWLIST} - spec.allowed.get("caps", set())
-    if extra_caps:
-        return GuardResult(False, "added_entity", tuple(sorted(extra_caps)))
+    if not spec.allow_new_entities:
+        extra_caps = {c for c in nf["caps"] if c.lower() not in _CAP_ALLOWLIST} - spec.allowed.get("caps", set())
+        if extra_caps:
+            return GuardResult(False, "added_entity", tuple(sorted(extra_caps)))
 
     # (b) no removals of required facts (warnings / risk figures / key numbers)
     for cat in _CATEGORIES:

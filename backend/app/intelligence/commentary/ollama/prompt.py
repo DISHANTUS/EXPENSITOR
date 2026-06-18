@@ -17,6 +17,11 @@ _STYLE = {
     "concise": "as short as possible while keeping every fact",
     "balanced": "clear and natural, roughly the same length",
     "detailed": "a little more explanatory, but introduce no new facts",
+    # Companion personalities (4c-B2) — wording/voice only, never new facts.
+    "cheerful": "warm, upbeat and friendly",
+    "professional": "concise, calm and businesslike",
+    "anime": "playful and warm, like a friendly anime companion; you may add ONE light emoji",
+    "minimal": "very short and plain — keep every fact, drop all flourish",
 }
 
 _SYSTEM = (

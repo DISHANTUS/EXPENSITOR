@@ -47,6 +47,14 @@ async def _ensure_test_database() -> None:
         await admin.dispose()
 
 
+@pytest_asyncio.fixture(autouse=True)
+def _ollama_off(monkeypatch):
+    """Tests are deterministic regardless of the local .env: never call a live
+    Ollama. Narration tests inject a stub `generate` to exercise that path."""
+    from app.core.config import settings as _s
+    monkeypatch.setattr(_s, "OLLAMA_ENABLED", False)
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
     await _ensure_test_database()

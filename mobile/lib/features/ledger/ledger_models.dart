@@ -2,6 +2,8 @@
 // transaction history. Pure functions (bodies, merge, labels) are unit-tested
 // without any network.
 
+import '../../core/format/dates.dart';
+
 String? _s(dynamic v) => v?.toString();
 
 /// A pickable expense category (system or user-owned) from GET /categories.
@@ -34,10 +36,6 @@ String incomeSourceLabel(String value) => incomeSourceOptions
     .firstWhere((o) => o.value == value, orElse: () => (value: value, label: value))
     .label;
 
-/// "YYYY-MM-DD" for date-only API fields (expense_date / received_date).
-String ymd(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
 /// Build the POST /expenses body. Omits optional fields when empty so the
 /// backend's `extra="forbid"` schema never rejects a null/blank.
 Map<String, dynamic> expenseBody({
@@ -53,6 +51,38 @@ Map<String, dynamic> expenseBody({
       'expense_date': ymd(date),
       if (categoryId != null && categoryId.isNotEmpty) 'category_id': categoryId,
       if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+    };
+
+/// Planner-event occasion types accepted by POST /planned-expenses.
+const occasionOptions = <({String value, String label})>[
+  (value: 'outing', label: 'Outing'),
+  (value: 'shopping', label: 'Shopping'),
+  (value: 'entertainment', label: 'Entertainment'),
+  (value: 'travel', label: 'Travel'),
+  (value: 'date', label: 'Date'),
+  (value: 'birthday', label: 'Birthday'),
+  (value: 'festival', label: 'Festival'),
+  (value: 'vacation', label: 'Vacation'),
+  (value: 'celebration', label: 'Celebration'),
+  (value: 'custom', label: 'Custom'),
+];
+
+/// Build the POST /planned-expenses body (a calendar event).
+Map<String, dynamic> eventBody({
+  required String title,
+  required String amount,
+  required String currency,
+  required DateTime date,
+  String? occasionType,
+  String? notes,
+}) =>
+    {
+      'title': title.trim(),
+      'planned_date': ymd(date),
+      'original_amount': amount,
+      'original_currency': currency.toUpperCase(),
+      if (occasionType != null && occasionType.isNotEmpty) 'occasion_type': occasionType,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
     };
 
 /// Build the POST /incomes body.
