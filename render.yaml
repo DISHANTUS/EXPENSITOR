@@ -11,7 +11,7 @@ services:
     rootDir: backend            # Docker build context (Dockerfile is here)
     dockerfilePath: ./Dockerfile
     region: singapore           # pick the region closest to your users
-    plan: starter               # 'free' works but cold-starts ~50s; 'starter' is always-on
+    plan: free                  # free tier; spins down when idle (~50s cold start). Use 'starter' for always-on.
     healthCheckPath: /api/v1/health
     autoDeploy: true
     # Run migrations + idempotent seeds, then serve on Render's injected $PORT.
