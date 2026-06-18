@@ -8,8 +8,10 @@ import 'auth_interceptor.dart';
 
 BaseOptions _baseOptions() => BaseOptions(
       baseUrl: Env.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 20),
+      // Generous connect timeout so the first request survives a free-tier host
+      // cold start (~50s wake). Lower this if you move to an always-on instance.
+      connectTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 30),
       contentType: 'application/json',
       // Let our interceptor/mapper decide; don't throw inside Dio for <500.
       validateStatus: (s) => s != null && s < 400,
