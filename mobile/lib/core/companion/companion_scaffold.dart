@@ -128,6 +128,14 @@ class CompanionScaffold extends ConsumerWidget {
         appBar: AppBar(
           title: Text(title),
           actions: [
+            // A one-tap way back to Advary's room from anywhere (Home itself shows
+            // the greeting, so it doesn't need the shortcut). The orb = Home.
+            if (!showGreeting)
+              IconButton(
+                tooltip: 'Home',
+                icon: const CompanionOrb(state: OrbState.idle, size: 26),
+                onPressed: () => context.go('/home'),
+              ),
             ...actions,
             IconButton(
               tooltip: 'Talk to me',

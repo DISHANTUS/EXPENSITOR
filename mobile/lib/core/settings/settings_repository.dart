@@ -168,6 +168,17 @@ class SettingsRepository {
     }
   }
 
+  /// Developer-only: seed this month with one of each event type (to test the
+  /// Living Calendar animations + orb reactions). Returns how many were added.
+  Future<int> seedCalendarPreview() async {
+    try {
+      final res = await _dio.post<dynamic>('/dev/calendar-preview');
+      return ((res.data as Map)['created'] as num?)?.toInt() ?? 0;
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
   /// When exchange rates were last updated, their source, and whether they're stale.
   Future<RatesStatus> ratesStatus() async {
     try {

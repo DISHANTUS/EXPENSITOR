@@ -71,6 +71,25 @@ const _companionNames = ['Advary', 'Hikari', 'Auri', 'Sora', 'Nova'];
 
 /// Reset / Clean-Slate (pre-Sprint-8): irreversible confirmation, then wipe/seed
 /// and refresh every companion surface so the fresh state shows immediately.
+/// Developer-only: seed this month with sample events, then jump to Home so the
+/// Living Calendar animations + orb reactions are immediately visible.
+Future<void> seedCalendarPreview(BuildContext context, WidgetRef ref) async {
+  try {
+    final n = await ref.read(settingsRepositoryProvider).seedCalendarPreview();
+    for (final p in [timelineProvider, futureMeProvider, relationshipsProvider,
+                     monthViewProvider, dailyBriefProvider, companionMoodProvider]) {
+      ref.invalidate(p);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added $n sample events this month — open the calendar.')));
+      context.go('/home');
+    }
+  } on AppError catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
 Future<void> resetCompanionData(BuildContext context, WidgetRef ref,
     {required String mode, required String title, required String body, required String confirmLabel}) async {
   final ok = await showDialog<bool>(
@@ -394,6 +413,14 @@ class SettingsScreen extends ConsumerWidget {
             const Padding(
               padding: EdgeInsets.fromLTRB(4, 4, 4, 4),
               child: Text('Developer / Testing', style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.event_available_outlined),
+                title: const Text('Seed calendar preview'),
+                subtitle: const Text('Add one of each event type this month to test calendar animations'),
+                onTap: () => seedCalendarPreview(context, ref),
+              ),
             ),
             Card(
               child: ListTile(

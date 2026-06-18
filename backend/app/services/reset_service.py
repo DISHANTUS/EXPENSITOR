@@ -10,6 +10,7 @@ delete (session_expenses cascade from expenses/budget_sessions) leaves no orphan
 
 from __future__ import annotations
 
+import calendar as _cal
 import uuid
 from datetime import date, timedelta
 
@@ -37,6 +38,7 @@ from app.models import (
     SavingsGoal,
     UserSettings,
 )
+from app.schemas.expense import ExpenseCreate
 from app.schemas.income import IncomeCreate
 from app.schemas.life_event import LifeEventCreate
 from app.schemas.planned_expense import PlannedExpenseCreate
@@ -44,6 +46,7 @@ from app.schemas.receivable import ReceivableCreate
 from app.schemas.savings import SavingsGoalCreate
 from app.services import (
     calendar_service,
+    expense_service,
     income_service,
     life_event_service,
     life_lesson_service,
@@ -114,3 +117,39 @@ async def demo_seed(db: AsyncSession, user_id: uuid.UUID, *, today: date | None 
         title="Move to a new city", event_date=today + timedelta(days=400), kind="move", icon="✈️"))
     await life_lesson_service.teach(db, user_id, source_text="plan ahead for big purchases", today=today)
     await db.commit()
+
+
+async def seed_calendar_preview(db: AsyncSession, user_id: uuid.UUID, *, today: date | None = None) -> int:
+    """Developer-only: scatter one of each event type across THIS month so the
+    Living Calendar's animations + orb reactions can be checked instantly, without
+    waiting for a real birthday / salary / loan. Adds to existing data (no wipe)."""
+    today = today or await calendar_service.user_today(db, user_id)
+    cur = (await settings_service.get_settings(db, user_id)).base_currency
+    last = _cal.monthrange(today.year, today.month)[1]
+
+    def day(n: int) -> date:
+        return date(today.year, today.month, min(max(n, 1), last))
+
+    # 💰 income · 👑 a saved (under-budget) day · 🔴 an over-budget day
+    await income_service.create(db, user_id, IncomeCreate(
+        source_type="salary", original_amount="5000", original_currency=cur, received_date=day(3)))
+    await expense_service.create(db, user_id, ExpenseCreate(
+        original_amount="50", original_currency=cur, expense_date=day(5)))
+    await expense_service.create(db, user_id, ExpenseCreate(
+        original_amount="9000", original_currency=cur, expense_date=day(7)))
+    # 🎂 birthday · ❤️ outing with a person · ✈️ trip
+    await planned_expense_service.create(db, user_id, PlannedExpenseCreate(
+        title="Birthday party", planned_date=day(10), occasion_type="birthday",
+        original_amount="800", original_currency=cur))
+    await planned_expense_service.create(db, user_id, PlannedExpenseCreate(
+        title="Outing with Mia", planned_date=day(12), occasion_type="outing",
+        original_amount="600", original_currency=cur))
+    await planned_expense_service.create(db, user_id, PlannedExpenseCreate(
+        title="Trip to Kyoto", planned_date=day(15), occasion_type="travel",
+        original_amount="4000", original_currency=cur))
+    # 💸 money lent, repayment expected later this month
+    await receivables_service.create(db, user_id, ReceivableCreate(
+        title="Lent to Sam", source_name="Sam", source_type="friend", kind="one_time",
+        original_amount="1500", original_currency=cur, expected_date=day(today.day + 6)))
+    await db.commit()
+    return 7

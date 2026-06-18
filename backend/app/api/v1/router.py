@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     currency,
     daily_plans,
     decisions,
+    dev,
     expenses,
     financial_health,
     income_sources,
@@ -45,6 +46,7 @@ api_router = APIRouter()
 api_router.include_router(system.router)
 api_router.include_router(auth.router)
 api_router.include_router(users.router)
+api_router.include_router(dev.router)
 api_router.include_router(currency.router)
 api_router.include_router(categories.router)
 api_router.include_router(calendar.router)
