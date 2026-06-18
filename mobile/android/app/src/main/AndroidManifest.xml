@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access for the API. REQUIRED in the main manifest: Flutter only
+         auto-adds INTERNET to debug/profile builds, so release APKs without this
+         line cannot reach the backend ("No connection"). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Voice Conversation Layer (Sprint 5c): mic capture + on-device STT. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
