@@ -39,3 +39,17 @@ class ConvertResponse(BaseModel):
     from_currency: str
     to_currency: str
     rate_date: date | None
+
+
+class RatesStatus(BaseModel):
+    rate_date: date | None = None
+    source: str | None = None
+    stale: bool = True
+
+
+class RatesRefreshResult(BaseModel):
+    updated: int = 0
+    rate_date: date | None = None
+    source: str | None = None
+    stale: bool = True
+    error: str | None = None

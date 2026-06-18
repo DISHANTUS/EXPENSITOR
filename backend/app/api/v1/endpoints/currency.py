@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentUser, DbSession
-from app.schemas.currency import ConvertRequest, ConvertResponse, CurrencyRead
-from app.services import currency_service
+from app.schemas.currency import (
+    ConvertRequest,
+    ConvertResponse,
+    CurrencyRead,
+    RatesRefreshResult,
+    RatesStatus,
+)
+from app.services import calendar_service, currency_service, rates_service
 from app.services.exceptions import CurrencyNotFoundError, RateNotAvailableError
 
 router = APIRouter(tags=["currency"])
@@ -41,3 +47,18 @@ async def convert(data: ConvertRequest, current_user: CurrentUser, db: DbSession
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     return ConvertResponse.model_validate(result)
+
+
+@router.get("/currency/rates-status", response_model=RatesStatus,
+            summary="When exchange rates were last updated + their source")
+async def rates_status(current_user: CurrentUser, db: DbSession) -> RatesStatus:
+    today = await calendar_service.user_today(db, current_user.id)
+    return RatesStatus.model_validate(await rates_service.status(db, today=today))
+
+
+@router.post("/currency/refresh", response_model=RatesRefreshResult,
+             summary="Refresh exchange rates from the live source (only if stale, unless force)")
+async def refresh_rates(current_user: CurrentUser, db: DbSession,
+                        force: bool = Query(default=False)) -> RatesRefreshResult:
+    today = await calendar_service.user_today(db, current_user.id)
+    return RatesRefreshResult.model_validate(await rates_service.refresh(db, today=today, force=force))

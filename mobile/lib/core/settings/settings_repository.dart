@@ -168,6 +168,27 @@ class SettingsRepository {
     }
   }
 
+  /// When exchange rates were last updated, their source, and whether they're stale.
+  Future<RatesStatus> ratesStatus() async {
+    try {
+      final res = await _dio.get<dynamic>('/currency/rates-status');
+      return RatesStatus.fromJson((res.data as Map).cast<String, dynamic>());
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  /// Pull the latest public exchange rates (only fetches if stale unless [force]).
+  Future<RatesStatus> refreshRates({bool force = false}) async {
+    try {
+      final res = await _dio.post<dynamic>('/currency/refresh',
+          queryParameters: {'force': force});
+      return RatesStatus.fromJson((res.data as Map).cast<String, dynamic>());
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
   /// Returns the converted amount as a string.
   Future<String> convert(String amount, String from, String to) async {
     try {
@@ -207,3 +228,19 @@ final userSettingsProvider =
 
 final currenciesProvider =
     FutureProvider.autoDispose<List<String>>((ref) => ref.watch(settingsRepositoryProvider).currencies());
+
+/// Freshness of the exchange-rate table (date + source + stale flag).
+class RatesStatus {
+  const RatesStatus({this.rateDate, this.source, this.stale = true});
+  factory RatesStatus.fromJson(Map<String, dynamic> j) => RatesStatus(
+        rateDate: j['rate_date']?.toString(),
+        source: j['source']?.toString(),
+        stale: j['stale'] == true,
+      );
+  final String? rateDate;
+  final String? source;
+  final bool stale;
+}
+
+final ratesStatusProvider =
+    FutureProvider.autoDispose<RatesStatus>((ref) => ref.watch(settingsRepositoryProvider).ratesStatus());

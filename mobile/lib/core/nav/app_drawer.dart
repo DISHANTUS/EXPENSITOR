@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
 import '../companion/companion_orb.dart';
 import '../settings/settings_repository.dart';
+import '../theme/app_theme.dart';
 
 /// A small, alive line under the companion name. Uses the user's chosen name
 /// (never their email) when they've told us one.
@@ -50,23 +51,40 @@ class AppDrawer extends ConsumerWidget {
     final name = settings?.displayName;
 
     return Drawer(
+      backgroundColor: AppColors.surface,
       child: SafeArea(
         child: Column(
           children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: cs.primaryContainer),
+            // Integrated aurora header (no solid block): the orb + identity sit on
+            // a soft gradient that bleeds to the drawer edges, matching Home's glass look.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.22),
+                    AppColors.secondary.withValues(alpha: 0.06),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const CompanionOrb(state: OrbState.idle, size: 40),
-                  const SizedBox(height: 6),
-                  Text(companion, style: Theme.of(context).textTheme.titleLarge),
+                  const CompanionOrb(state: OrbState.idle, size: 52),
+                  const SizedBox(height: 10),
+                  Text(companion,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
                   Text(_greeting(DateTime.now().hour, name),
-                      style: Theme.of(context).textTheme.bodySmall),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 ],
               ),
             ),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
