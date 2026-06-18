@@ -8,8 +8,9 @@ services:
     runtime: docker
     repo: https://github.com/DISHANTUS/EXPENSITOR
     branch: beta-prep           # the beta candidate; switch to main after you merge
-    rootDir: backend            # Docker build context (Dockerfile is here)
-    dockerfilePath: ./Dockerfile
+    # Paths are relative to the REPO ROOT (not a rootDir). The app lives in backend/.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     region: singapore           # pick the region closest to your users
     plan: free                  # free tier; spins down when idle (~50s cold start). Use 'starter' for always-on.
     healthCheckPath: /api/v1/health
