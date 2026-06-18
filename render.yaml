@@ -15,8 +15,9 @@ services:
     plan: free                  # free tier; spins down when idle (~50s cold start). Use 'starter' for always-on.
     healthCheckPath: /api/v1/health
     autoDeploy: true
-    # Run migrations + idempotent seeds, then serve on Render's injected $PORT.
-    dockerCommand: sh -c "alembic upgrade head && python -m app.seed.run_seeds && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    # Migrations + idempotent seeds + serve on $PORT, via a script (no shell-quoting
+    # ambiguity — Render wraps the command in a shell itself).
+    dockerCommand: sh start.sh
     envVars:
       - key: SECRET_KEY
         generateValue: true     # Render generates a strong random secret
