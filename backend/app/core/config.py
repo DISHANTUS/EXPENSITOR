@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "expensitor"
     POSTGRES_PASSWORD: str = "expensitor"
     POSTGRES_DB: str = "expensitor"
+    # Managed Postgres (e.g. Neon) requires TLS. asyncpg doesn't honour libpq's
+    # `sslmode=` query param, so we pass ssl via connect_args instead. Off locally.
+    DB_SSL: bool = False
 
     # --- Connection pool ---
     DB_POOL_SIZE: int = 10

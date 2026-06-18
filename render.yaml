@@ -1,0 +1,45 @@
+# Render Blueprint for the Advary/Expensitor API.
+# Deploy: Render Dashboard → New → Blueprint → pick this repo. Render reads this file.
+# The database is Neon (external) — set the POSTGRES_* secrets below from your Neon
+# project's *direct* connection details. Neon is not provisioned by this file.
+services:
+  - type: web
+    name: expensitor-api
+    runtime: docker
+    repo: https://github.com/DISHANTUS/EXPENSITOR
+    branch: beta-prep           # the beta candidate; switch to main after you merge
+    rootDir: backend            # Docker build context (Dockerfile is here)
+    dockerfilePath: ./Dockerfile
+    region: singapore           # pick the region closest to your users
+    plan: starter               # 'free' works but cold-starts ~50s; 'starter' is always-on
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    # Run migrations + idempotent seeds, then serve on Render's injected $PORT.
+    dockerCommand: sh -c "alembic upgrade head && python -m app.seed.run_seeds && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true     # Render generates a strong random secret
+      - key: DB_SSL
+        value: "true"           # Neon requires TLS
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: OLLAMA_ENABLED
+        value: "false"          # no local model on Render; deterministic narration
+      - key: DEFAULT_BASE_CURRENCY
+        value: INR
+      - key: POSTGRES_PORT
+        value: "5432"
+      # --- Set these from Neon (dashboard → secret; never commit them) ---
+      - key: POSTGRES_SERVER
+        sync: false             # e.g. ep-xxxx-xxxx.<region>.aws.neon.tech
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false             # use a password with no URL-special chars (@ : / ? #)
+      - key: POSTGRES_DB
+        sync: false
+      # CORS is not needed for the native APK (dio). Add a JSON array only for a web client:
+      # - key: BACKEND_CORS_ORIGINS
+      #   value: '["https://your-web-app.example"]'
