@@ -38,13 +38,14 @@ async def build(db: AsyncSession, user_id: uuid.UUID) -> dict:
     feas = await feasibility_service.assess(db, user_id)
     if feas.goals:
         g = feas.goals[0]
+        rate = _money(cur, g.target_monthly)
         if g.probability_band in _POSITIVE:
-            lines.append(f"{g.goal} is on track.")
+            lines.append(f"{g.goal} is on track — about {rate}/month keeps you on pace.")
             mood = "celebrating"
         elif g.probability_band == "medium":
-            lines.append(f"{g.goal} is within reach.")
+            lines.append(f"{g.goal} is within reach — around {rate}/month gets you there.")
         else:
-            lines.append(f"{g.goal} needs a little attention — let's look at the plan.")
+            lines.append(f"{g.goal} needs attention — it'd take about {rate}/month. Let's look at the plan.")
             mood = "concerned"
 
     # 2) Who owes you (receivables).

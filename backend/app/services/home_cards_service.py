@@ -22,8 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.intelligence.timeline import builder as B, chapters as C
 from app.services import (
     calendar_service,
+    feasibility_service,
     future_me_service,
     home_thought_service,
+    profile_service,
     relationship_service,
     timeline_service,
 )
@@ -62,6 +64,9 @@ def _story_card(entries: list[B.Entry], today: date) -> dict:
     return _card("story", "📖", "Your Story", headline, "/timeline", subtitle=subtitle)
 
 
+_COUNTRY = {"IN": "India", "JP": "Japan", "US": "the US", "GB": "the UK"}
+
+
 async def _future_card(db: AsyncSession, user_id: uuid.UUID, today: date) -> dict:
     fm = await future_me_service.get_future_me(db, user_id, today=today)
     milestones = fm.get("milestones") or []
@@ -74,7 +79,22 @@ async def _future_card(db: AsyncSession, user_id: uuid.UUID, today: date) -> dic
         headline = f"{m.get('icon', '🔮')} {m['title']}"
         subtitle = when or (m.get("detail") or None)
         return _card("future", "✨", "Future You", headline, "/future-me", subtitle=subtitle)
-    # Nothing dated ahead yet — invite them to look forward.
+
+    # No dated milestone yet — surface the real plan we DO know: a future move…
+    profile = await profile_service.get_profile(db, user_id)
+    if profile.moving_country and profile.future_country:
+        where = _COUNTRY.get(profile.future_country, profile.future_country)
+        sub = f"Expected {profile.future_move_year}" if profile.future_move_year else "On the horizon"
+        return _card("future", "✨", "Future You", f"✈️ Move to {where}", "/future-me", subtitle=sub)
+
+    # …else the goal they're working toward.
+    feas = await feasibility_service.assess(db, user_id)
+    if feas.goals:
+        g = feas.goals[0]
+        return _card("future", "✨", "Future You", f"🎯 {g.goal}", "/future-me",
+                     subtitle="See where this goal takes you")
+
+    # Nothing forward-looking yet — invite them to look ahead.
     return _card("future", "✨", "Future You", "Plan your future",
                  "/future-me", subtitle="Set a goal and see where it takes you")
 

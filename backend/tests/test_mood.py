@@ -139,6 +139,17 @@ async def test_event_mood_from_todays_income(client: AsyncClient) -> None:
     assert any(f["id"] == "salary" for f in m["rotation"])
 
 
+async def test_new_user_has_no_fake_budget_streak(client: AsyncClient) -> None:
+    """A brand-new account with a budget but no tracked days must not claim a
+    multi-day budget streak (regression: a derived daily budget over empty
+    pre-account days awarded a 60-day streak)."""
+    import json
+
+    h = await _auth(client, "streak_new@example.com", monthly_threshold="30000")
+    m = (await client.get(f"{MOOD}?hour=9", headers=h)).json()
+    assert "budget streak" not in json.dumps(m).lower()
+
+
 async def test_chat_mood_is_explainable(client: AsyncClient) -> None:
     h = await _auth(client, "md5@example.com", monthly_threshold="1000")
     await client.post("/api/v1/expenses",

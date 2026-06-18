@@ -32,6 +32,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final month = ref.watch(monthViewProvider((year: _focused.year, month: _focused.month)));
     final registry = ref.watch(markerRegistryProvider).valueOrNull ?? fallbackMarkers;
     final monthData = month.valueOrNull;
+    // Advary's contextual thought now lives INSIDE the one companion bubble (no
+    // second orb) — and gives the single orb its mood (concerned on budget pressure).
+    final thought = ref.watch(homeThoughtProvider).valueOrNull;
 
     return CompanionScaffold(
       title: 'Home',
@@ -39,12 +42,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // rotation; timeGreeting() is the fallback before the live one loads.
       showGreeting: true,
       commentary: timeGreeting(),
-      mood: moodFromSeverity(brief.valueOrNull?.severity),
+      mood: thought?.mood == 'concerned'
+          ? CompanionMood.concerned
+          : moodFromSeverity(brief.valueOrNull?.severity),
+      extraLines: thought?.lines ?? const [],
       child: ListView(
         children: [
-          const _HomeThought(),
+          const _QuickActions(),
           const _MemoryStrip(),
-          const _LivingCards(),
           Card(
             margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Padding(
@@ -93,53 +98,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (month.isLoading)
             const Padding(padding: EdgeInsets.all(8), child: Center(child: Text('Loading month…'))),
           const _Legend(),
+          // Previews of your story, future and people (below the calendar).
+          const _LivingCards(),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 }
 
-/// Advary's Room hero — the orb (reacting to today's state) + a short contextual
-/// thought (goal status, who owes you, next milestone). The first thing on Home.
-class _HomeThought extends ConsumerWidget {
-  const _HomeThought();
+/// A compact command-centre grid right under the companion — fast jumps to the
+/// places you use most, so Home isn't only previews + drawer.
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+
+  static const _actions = <(String, IconData, String)>[
+    ('Plan Today', Icons.today_outlined, '/plan-today'),
+    ('Chat', Icons.chat_bubble_outline, '/advisor'),
+    ('Timeline', Icons.timeline, '/timeline'),
+    ('Future Me', Icons.auto_graph, '/future-me'),
+    ('Converter', Icons.currency_exchange, '/convert'),
+    ('Settings', Icons.settings_outlined, '/settings'),
+  ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final thought = ref.watch(homeThoughtProvider).valueOrNull;
-    if (thought == null || thought.lines.isEmpty) return const SizedBox.shrink();
-    final orb = switch (thought.mood) {
-      'celebrating' => OrbState.celebrating,
-      'concerned' => OrbState.concerned,
-      _ => OrbState.idle,
-    };
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-      child: GlassCard(
-        padding: const EdgeInsets.fromLTRB(14, 14, 16, 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CompanionOrb(state: orb, size: 56),
-            const SizedBox(width: 10),
-            Expanded(
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.55,
+        children: [
+          for (final (label, icon, route) in _actions)
+            GlassCard(
+              padding: const EdgeInsets.all(6),
+              onTap: () => context.go(route),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (var i = 0; i < thought.lines.length; i++)
-                    Padding(
-                      padding: EdgeInsets.only(top: i == 0 ? 4 : 6),
-                      child: Text(thought.lines[i],
-                          style: i == 0
-                              ? tt.titleMedium?.copyWith(fontWeight: FontWeight.w600, height: 1.25)
-                              : tt.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.3)),
-                    ),
+                  Icon(icon, color: cs.primary, size: 22),
+                  const SizedBox(height: 5),
+                  Text(label, style: tt.labelSmall, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

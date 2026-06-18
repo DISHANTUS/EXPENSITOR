@@ -66,6 +66,7 @@ class CompanionScaffold extends ConsumerWidget {
     this.mood = CompanionMood.neutral,
     this.actions = const [],
     this.showGreeting = false,
+    this.extraLines = const [],
   });
 
   final String title;
@@ -76,6 +77,9 @@ class CompanionScaffold extends ConsumerWidget {
   /// Only Home shows the daily companion greeting + live rotating mood. Every
   /// other screen uses its own page `commentary` (budget, currency, date, …).
   final bool showGreeting;
+  /// Extra contextual lines shown inside the SAME companion bubble (Home's
+  /// thought: goal status, who owes you, next milestone). Keeps Home to ONE orb.
+  final List<String> extraLines;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -140,6 +144,7 @@ class CompanionScaffold extends ConsumerWidget {
             if (!collapsed)
               _CompanionPanel(
                 commentary: commentary,
+                extraLines: extraLines,
                 mood: mood,
                 orbState: orbState,
                 live: live,
@@ -179,6 +184,7 @@ class CompanionScaffold extends ConsumerWidget {
 class _CompanionPanel extends StatelessWidget {
   const _CompanionPanel({
     required this.commentary,
+    required this.extraLines,
     required this.mood,
     required this.orbState,
     required this.live,
@@ -189,6 +195,7 @@ class _CompanionPanel extends StatelessWidget {
     required this.onCollapse,
   });
   final String? commentary;
+  final List<String> extraLines;
   final CompanionMood mood;
   final OrbState orbState;
   final MoodState? live;
@@ -240,7 +247,7 @@ class _CompanionPanel extends StatelessWidget {
                 child: reaction != null
                     ? ReactionCard(reaction!, key: ValueKey('rx:${reaction!.signature}'),
                         onDismiss: onDismissReaction ?? () {}, onTap: onTapReaction)
-                    : _GreetingBubble(live: live, commentary: commentary, accent: accent),
+                    : _GreetingBubble(live: live, commentary: commentary, extraLines: extraLines, accent: accent),
               ),
             ),
             IconButton(
@@ -259,10 +266,11 @@ class _CompanionPanel extends StatelessWidget {
 /// The greeting bubble: cross-fades when a background-narrated version arrives
 /// (version-based, not polling), and shows "why did I say this?" on tap.
 class _GreetingBubble extends ConsumerStatefulWidget {
-  const _GreetingBubble({required this.live, required this.commentary, required this.accent});
+  const _GreetingBubble({required this.live, required this.commentary, required this.accent, this.extraLines = const []});
   final MoodState? live;
   final String? commentary;
   final Color accent;
+  final List<String> extraLines;
 
   @override
   ConsumerState<_GreetingBubble> createState() => _GreetingBubbleState();
@@ -372,6 +380,15 @@ class _GreetingBubbleState extends ConsumerState<_GreetingBubble> {
               transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
               child: _body(g),
             ),
+            // Home's contextual thought — goal status, who owes you, next milestone —
+            // lives in this SAME bubble so there's only one companion on screen.
+            for (final line in widget.extraLines)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(line,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.3)),
+              ),
             // Greeting sign-off with the companion's name (6c), Home greeting only.
             if (g != null && (widget.live?.companionName ?? '').isNotEmpty)
               Padding(

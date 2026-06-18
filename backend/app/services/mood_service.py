@@ -33,6 +33,7 @@ from app.models import (
     PlannedExpense,
     Receivable,
     SavingsGoal,
+    User,
 )
 from app.models.enums import (
     AdviceStatus,
@@ -150,20 +151,28 @@ def _time_of_day(hour: int) -> str:
 
 
 async def _budget_streak(db, user_id, today, settings) -> int:
-    """Consecutive days ending today that were not over budget (0 if unknown)."""
-    start = today - timedelta(days=60)
+    """Consecutive *active* days ending today that came in under budget.
+
+    A genuine streak only counts days the user actually tracked (classification
+    'saved'/'within') — empty days with no spending aren't a "win", and we never
+    look back past the account's creation (otherwise a derived daily budget would
+    award a brand-new user a streak for days before they ever joined)."""
+    created = await db.scalar(select(User.created_at).where(User.id == user_id))
+    floor = max(today - timedelta(days=60), created.date() if created else today - timedelta(days=60))
     spent_by = await analytics_service._sum_by_day(  # noqa: SLF001
-        db, Expense, Expense.expense_date, Expense.converted_amount, user_id, start, today)
+        db, Expense, Expense.expense_date, Expense.converted_amount, user_id, floor, today)
     plans = {r[0]: r[1] for r in (await db.execute(
         select(DailyPlan.plan_date, DailyPlan.planned_budget).where(
-            DailyPlan.user_id == user_id, DailyPlan.plan_date >= start, DailyPlan.plan_date <= today))).all()}
+            DailyPlan.user_id == user_id, DailyPlan.plan_date >= floor, DailyPlan.plan_date <= today))).all()}
     streak = 0
     d = today
-    while d >= start:
+    while d >= floor:
         budget = analytics_service._budget_for(settings, plans.get(d), d)  # noqa: SLF001
         if budget is None:
             break
-        if calendar_service.classify(spent_by.get(d, _ZERO), budget, d, today) == "over":
+        # Only days with real activity that stayed within budget extend the streak;
+        # an over-budget day breaks it, a no-activity day simply ends the run.
+        if calendar_service.classify(spent_by.get(d, _ZERO), budget, d, today) not in ("saved", "within"):
             break
         streak += 1
         d -= timedelta(days=1)
