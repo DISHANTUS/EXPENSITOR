@@ -76,13 +76,14 @@ async def test_probability_is_a_band_not_binary(client: AsyncClient):
     assert 0 <= f["goals"][0]["probability_score"] <= 100
 
 
-async def test_emergency_buffer_funded_before_goals(client: AsyncClient):
+async def test_backup_money_is_the_leftover_after_goals(client: AsyncClient):
     h = await _auth(client)
     await _income(client, h, "Salary", "salary", "50000")
     f = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
     labels = [s["label"] for s in f["waterfall"]]
-    assert labels.index("Emergency buffer") < labels.index("Goals")
-    assert float(f["emergency_buffer"]) > 0               # first-class, non-zero
+    # Backup Money is the LEFTOVER at the end — after goals, never before them.
+    assert labels.index("Goals") < labels.index("Backup money")
+    assert float(f["backup_money"]) > 0                   # surplus exists here
 
 
 async def test_structural_housing_flag(client: AsyncClient):
@@ -102,11 +103,20 @@ async def test_no_income_asks_for_income(client: AsyncClient):
     assert "income" in f["summary"].lower()
 
 
-async def test_buffer_scales_with_optimization_style(client: AsyncClient):
-    h = await _auth(client)
-    await _income(client, h, "Salary", "salary", "100000")
-    await client.patch("/api/v1/users/me/profile", json={"optimization_style": "comfort_first"}, headers=h)
-    comfort = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
-    await client.patch("/api/v1/users/me/profile", json={"optimization_style": "aggressive_goal"}, headers=h)
-    aggressive = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
-    assert float(comfort["emergency_buffer"]) > float(aggressive["emergency_buffer"])
+async def test_backup_money_is_surplus_only(client: AsyncClient):
+    # Tight month: essentials + goal eat everything → no backup money (and the
+    # goal isn't penalised by a forced reserve).
+    h = await _auth(client, email="tight@example.com")
+    await _income(client, h, "Salary", "salary", "5000")
+    await client.patch("/api/v1/users/me/profile", json={"food_monthly": "4500"}, headers=h)
+    await _monthly_goal(client, h, "Savings", "500")
+    tight = (await client.get("/api/v1/budget/feasibility", headers=h)).json()
+    assert float(tight["backup_money"]) == 0
+
+    # Roomy month: money left after living + goal → backup money appears.
+    h2 = await _auth(client, email="roomy@example.com")
+    await _income(client, h2, "Salary", "salary", "5000")
+    await client.patch("/api/v1/users/me/profile", json={"food_monthly": "2000"}, headers=h2)
+    await _monthly_goal(client, h2, "Savings", "1000")
+    roomy = (await client.get("/api/v1/budget/feasibility", headers=h2)).json()
+    assert float(roomy["backup_money"]) > 0

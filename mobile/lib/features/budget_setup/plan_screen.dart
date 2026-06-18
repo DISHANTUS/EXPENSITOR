@@ -87,21 +87,16 @@ class PlanScreen extends ConsumerWidget {
 
   Widget _waterfallCard(BuildContext context, Feasibility f) {
     final tt = Theme.of(context).textTheme;
+    // Only show rows that actually carry money (Income always shows). No ₹0 clutter.
+    final steps = f.waterfall.where((s) => s.label == 'Income' || s.amount.abs() > 0.005).toList();
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Where your money goes', style: tt.titleMedium),
         const SizedBox(height: 4),
-        Text('Income → essentials → buffer → goals → lifestyle', style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text('Living first, then goals, then lifestyle — backup money is whatever’s left.',
+            style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 12),
-        for (final s in f.waterfall)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Row(children: [
-              SizedBox(width: 18, child: Text(s.label == 'Income' ? '↓' : '−', style: tt.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary))),
-              Expanded(child: Text(s.label, style: tt.bodyMedium?.copyWith(fontWeight: s.label == 'Income' ? FontWeight.w700 : FontWeight.w400))),
-              Text(_money(f.currency, s.amount), style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-            ]),
-          ),
+        for (final s in steps) _WaterfallRow(step: s, currency: f.currency),
         const Divider(height: 22),
         Row(children: [
           Expanded(child: Text('Comfortably free each month', style: tt.bodyMedium)),
@@ -251,6 +246,76 @@ class _PlanError extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One waterfall line. Lines with a breakdown (e.g. Essential living → food,
+/// transport, phone) tap to expand, so every number is traceable to its source.
+class _WaterfallRow extends StatefulWidget {
+  const _WaterfallRow({required this.step, required this.currency});
+  final WaterfallStep step;
+  final String currency;
+
+  @override
+  State<_WaterfallRow> createState() => _WaterfallRowState();
+}
+
+class _WaterfallRowState extends State<_WaterfallRow> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final s = widget.step;
+    final isIncome = s.label == 'Income';
+    final hasBreakdown = s.breakdown.isNotEmpty;
+
+    final header = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        SizedBox(width: 18, child: Text(isIncome ? '↓' : '−', style: tt.bodyMedium?.copyWith(color: cs.primary))),
+        Expanded(child: Text(s.label, style: tt.bodyMedium?.copyWith(fontWeight: isIncome ? FontWeight.w700 : FontWeight.w500))),
+        Text(_money(widget.currency, s.amount), style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+        if (hasBreakdown)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: AnimatedRotation(
+              turns: _open ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(Icons.expand_more, size: 18, color: cs.onSurfaceVariant),
+            ),
+          )
+        else
+          const SizedBox(width: 24),
+      ]),
+    );
+
+    if (!hasBreakdown) return header;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(onTap: () => setState(() => _open = !_open), child: header),
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(left: 18, bottom: 6),
+            child: Column(children: [
+              for (final b in s.breakdown)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(children: [
+                    Expanded(child: Text(b.label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
+                    Text(_money(widget.currency, b.amount), style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  ]),
+                ),
+            ]),
+          ),
+          crossFadeState: _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
     );
   }
 }

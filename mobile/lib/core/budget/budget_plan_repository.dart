@@ -10,10 +10,11 @@ String _s(dynamic v) => '${v ?? ''}';
 // --- Feasibility (Phase 3) ---------------------------------------------------
 
 class WaterfallStep {
-  WaterfallStep(this.label, this.amount, this.remaining);
+  WaterfallStep(this.label, this.amount, this.remaining, {this.breakdown = const []});
   final String label;
   final double amount;
   final double remaining;
+  final List<({String label, double amount})> breakdown;
 }
 
 class GoalFeasibility {
@@ -37,7 +38,7 @@ class Feasibility {
     required this.currency,
     required this.incomeTotal,
     required this.essentialsTotal,
-    required this.buffer,
+    required this.backupMoney,
     required this.comfortable,
     required this.overallBand,
     required this.waterfall,
@@ -51,11 +52,13 @@ class Feasibility {
         currency: _s(j['base_currency']),
         incomeTotal: _d(j['income_total']),
         essentialsTotal: _d(j['essentials_total']),
-        buffer: _d(j['emergency_buffer']),
+        backupMoney: _d(j['backup_money']),
         comfortable: _d(j['comfortable_surplus']),
         overallBand: _s(j['overall_band']),
         waterfall: ((j['waterfall'] as List?) ?? const [])
-            .map((e) => WaterfallStep(_s(e['label']), _d(e['amount']), _d(e['running_remaining'])))
+            .map((e) => WaterfallStep(_s(e['label']), _d(e['amount']), _d(e['running_remaining']),
+                breakdown: (((e['breakdown'] as List?) ?? const [])
+                    .map((b) => (label: _s(b['label']), amount: _d(b['amount']))).toList())))
             .toList(),
         goals: ((j['goals'] as List?) ?? const [])
             .map((e) => GoalFeasibility(_s(e['goal']), _d(e['target_monthly']), _s(e['probability_band']),
@@ -71,7 +74,7 @@ class Feasibility {
   final String currency;
   final double incomeTotal;
   final double essentialsTotal;
-  final double buffer;
+  final double backupMoney;
   final double comfortable;
   final String overallBand;
   final List<WaterfallStep> waterfall;

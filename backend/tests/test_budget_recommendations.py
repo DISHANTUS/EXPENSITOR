@@ -70,7 +70,7 @@ async def test_grow_income_and_why_not_when_cuts_fall_short(client: AsyncClient)
         "life_stage": "pg_student", "food_monthly": "12000", "transport_monthly": "3000",
         "lifestyle_monthly": "8000"}, headers=h)
     await _sub(client, h, "Netflix", "1500")
-    await _goal(client, h, "30000")
+    await _goal(client, h, "40000")     # gap far exceeds what any cut can free → must grow income
 
     r = (await client.get("/api/v1/budget/recommendations", headers=h)).json()
     assert r["why_not"] and ("food" in r["why_not"].lower() or "essential" in r["why_not"].lower())
@@ -84,7 +84,7 @@ async def test_conservative_tier_can_reach_a_small_gap(client: AsyncClient):
     await client.patch("/api/v1/users/me/profile",
                        json={"food_monthly": "10000", "lifestyle_monthly": "10000"}, headers=h)
     await _sub(client, h, "Spotify", "2000")
-    await _goal(client, h, "26000")     # small gap
+    await _goal(client, h, "30000")     # small gap above the comfortable surplus
 
     r = (await client.get("/api/v1/budget/recommendations", headers=h)).json()
     assert r["on_track"] is False
@@ -108,7 +108,7 @@ async def test_essentials_protected_unless_aggressive_and_insist(client: AsyncCl
     await _income(client, h, "5000")
     await client.patch("/api/v1/users/me/profile",
                        json={"food_monthly": "3000", "optimization_style": "aggressive_goal"}, headers=h)
-    await _goal(client, h, "2000")
+    await _goal(client, h, "2500")      # just beyond the comfortable surplus → cuts are needed
 
     # Default: food never suggested.
     base = (await client.get("/api/v1/budget/recommendations", headers=h)).json()

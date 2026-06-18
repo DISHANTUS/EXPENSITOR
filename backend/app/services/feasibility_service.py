@@ -2,7 +2,9 @@
 
 Turns the Reality Engine + country/profile context into a survival-first waterfall,
 a success-probability band (never binary), and a structural diagnosis. Deterministic
-(no LLM). The emergency buffer is funded BEFORE goals (it protects them).
+(no LLM). "Backup Money" is the LEFTOVER at the end of the waterfall — what remains
+after living, goals and lifestyle. It only exists when there's a surplus, and it
+never competes with (or reduces the probability of) a savings goal.
 """
 
 from __future__ import annotations
@@ -18,20 +20,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Expense
 from app.models.enums import OptimizationStyle
 from app.schemas.budget_reality import BudgetReality
-from app.schemas.feasibility import Feasibility, GoalFeasibility, StructuralFlag, WaterfallStep
+from app.schemas.feasibility import (
+    Feasibility,
+    GoalFeasibility,
+    StructuralFlag,
+    WaterfallStep,
+    WaterfallSubItem,
+)
 from app.services import calendar_service, reality_service
 
 _Q = Decimal("0.0001")
 _ZERO = Decimal("0")
-
-# Emergency-buffer rate by optimization style (share of income). Aggressive savers
-# keep a thin buffer; comfort-first keeps a fat one.
-_BUFFER_RATE = {
-    OptimizationStyle.aggressive_goal: Decimal("0.03"),
-    OptimizationStyle.max_savings: Decimal("0.05"),
-    OptimizationStyle.balanced: Decimal("0.07"),
-    OptimizationStyle.comfort_first: Decimal("0.10"),
-}
 
 
 def _band(score: int) -> str:
@@ -134,42 +133,54 @@ async def assess(db: AsyncSession, user_id: uuid.UUID) -> Feasibility:
     income = reality.income_total
     essentials = reality.essentials_total
     lifestyle = reality.adjustable.total
-    buffer = (income * _BUFFER_RATE[style]).quantize(_Q)
-
-    comfortable = (income - essentials - buffer - lifestyle).quantize(_Q)
-    stretch = (income - essentials - buffer).quantize(_Q)
-
-    # Waterfall: fund survival first, buffer before goals, lifestyle last.
-    essential_living = (reality.protected.total - reality.housing_total).quantize(_Q)
     goals_target = reality.goals.total
+
+    # No forced buffer competing with goals: what's "free" is just income minus
+    # essentials (keeping or cutting lifestyle). Backup Money is the leftover, below.
+    comfortable = (income - essentials - lifestyle).quantize(_Q)
+    stretch = (income - essentials).quantize(_Q)
+
+    # Backup Money = whatever genuinely remains after living, goals AND lifestyle.
+    # Surplus-only: zero when money is tight (so we never invent a reserve you can't afford).
+    backup = max(_ZERO, (income - essentials - goals_target - lifestyle)).quantize(_Q)
+
+    # Traceable breakdowns so every number is "where did this come from?".
+    def _sub(lines) -> list[WaterfallSubItem]:
+        return [WaterfallSubItem(label=ln.label, amount=ln.monthly.quantize(_Q))
+                for ln in lines if ln.monthly > _ZERO]
+
+    el_lines = [ln for ln in reality.protected.lines if ln.kind != "housing"]
+    housing_lines = [ln for ln in reality.protected.lines if ln.kind == "housing"]
+    essential_living = (reality.protected.total - reality.housing_total).quantize(_Q)
+
+    # Waterfall: survival → goals → lifestyle → backup (the leftover, last).
     steps_def = [
-        ("Income", income, False),
-        ("Essential living", essential_living, True),
-        ("Housing", reality.housing_total, True),
-        ("Committed", reality.committed.total, True),
-        ("Emergency buffer", buffer, True),
-        ("Goals", goals_target, True),
-        ("Lifestyle", lifestyle, True),
+        ("Income", income, False, []),
+        ("Essential living", essential_living, True, _sub(el_lines)),
+        ("Housing", reality.housing_total, True, _sub(housing_lines)),
+        ("Committed", reality.committed.total, True, _sub(reality.committed.lines)),
+        ("Goals", goals_target, True, _sub(reality.goals.lines)),
+        ("Lifestyle", lifestyle, True, _sub(reality.adjustable.lines)),
+        ("Backup money", backup, True, []),
     ]
     waterfall: list[WaterfallStep] = []
     remaining = _ZERO
-    for label, amount, subtract in steps_def:
+    for label, amount, subtract, breakdown in steps_def:
         remaining = amount if not subtract else (remaining - amount)
         waterfall.append(WaterfallStep(label=label, amount=amount.quantize(_Q),
-                                       running_remaining=remaining.quantize(_Q)))
+                                       running_remaining=remaining.quantize(_Q), breakdown=breakdown))
 
-    # Per-goal feasibility.
+    # Per-goal feasibility (goals are NOT penalised by any reserve).
     goals: list[GoalFeasibility] = []
     for line in reality.goals.lines:
         t = line.monthly
         score = _score(t, comfortable, stretch)
         if comfortable >= t:
-            reason = (f"After essentials ({_money(cur, essentials)}) and a {_money(cur, buffer)} buffer, "
-                      f"about {_money(cur, comfortable)} is comfortably available — your {_money(cur, t)} "
-                      f"target fits with room to spare.")
+            reason = (f"After your essentials ({_money(cur, essentials)}), about {_money(cur, comfortable)} "
+                      f"is comfortably free — your {_money(cur, t)} target fits with room to spare.")
         elif stretch >= t:
-            reason = (f"You can comfortably save {_money(cur, comfortable)}. Reaching {_money(cur, t)} "
-                      f"means trimming some lifestyle/adjustable spending (up to {_money(cur, stretch)} is possible).")
+            reason = (f"You can comfortably save {_money(cur, comfortable)}. Reaching {_money(cur, t)} means "
+                      f"trimming some lifestyle spending (up to {_money(cur, stretch)} is possible).")
         else:
             short = (t - stretch).quantize(_Q)
             reason = (f"Even after cutting all lifestyle, about {_money(cur, stretch)} is available — "
@@ -185,16 +196,15 @@ async def assess(db: AsyncSession, user_id: uuid.UUID) -> Feasibility:
     elif goals:
         worst = min(g.probability_score for g in goals)
         overall = _band(worst)
-        summary = (f"{_money(cur, comfortable)} is comfortably available each month "
-                   f"after essentials and a {_money(cur, buffer)} buffer.")
+        summary = f"{_money(cur, comfortable)} is comfortably free each month after your essentials."
     else:
         overall = "very_high" if comfortable > _ZERO else "low"
-        summary = (f"After essentials and a {_money(cur, buffer)} buffer, about {_money(cur, comfortable)} "
-                   f"is free each month — set a savings goal and I'll plan it.")
+        summary = (f"After your essentials, about {_money(cur, comfortable)} is free each month — "
+                   f"set a savings goal and I'll plan it.")
 
     return Feasibility(
         base_currency=cur, optimization_style=style.value,
-        income_total=income, essentials_total=essentials, emergency_buffer=buffer,
+        income_total=income, essentials_total=essentials, backup_money=backup,
         lifestyle_total=lifestyle, comfortable_surplus=comfortable, stretch_surplus=stretch,
         waterfall=waterfall, goals=goals, overall_band=overall,
         structural_flags=_structural(reality),
