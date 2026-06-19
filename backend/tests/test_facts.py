@@ -110,15 +110,15 @@ def test_fallback_thought_prefixed_and_present():
     assert line and line.startswith("Did you know? ")
 
 
-async def test_fact_is_last_resort_in_home_thought(client: AsyncClient):
-    """A brand-new user with no data sees a fact; once they add a goal, the
-    user-specific line wins and no fact appears."""
+async def test_home_thought_stays_quiet_when_nothing_user_specific(client: AsyncClient):
+    """A brand-new user's orb thought stays quiet (no fallback fact) — facts now
+    live only in the Did You Know card. Once they add a goal, the goal line shows."""
     h = await _auth(client, "fallback@example.com")
     await client.patch("/api/v1/users/me/settings",
                        json={"base_currency": "INR", "timezone": "UTC"}, headers=h)
 
     empty = (await client.get("/api/v1/companion/home-thought", headers=h)).json()
-    assert empty["lines"][0].startswith("Did you know?")
+    assert empty["lines"] == []
 
     # Add an income + a goal → the goal line takes over; the fact disappears.
     await client.post("/api/v1/income-sources", json={
