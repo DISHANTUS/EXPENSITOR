@@ -22,6 +22,7 @@ import '../../features/ledger/add_event_screen.dart';
 import '../../features/ledger/add_expense_screen.dart';
 import '../../features/ledger/add_income_screen.dart';
 import '../../features/ledger/add_lent_screen.dart';
+import '../../features/payables/repayment_plan_screen.dart';
 import '../../features/plan_today/plan_today_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/future_me/future_me_screen.dart';
@@ -68,6 +69,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/relationship/:name',
           builder: (_, state) => RelationshipDetailScreen(name: state.pathParameters['name'] ?? '')),
       GoRoute(path: '/feedback', builder: (_, __) => const FeedbackScreen()),
+      GoRoute(
+        path: '/payable/:id/repay',
+        builder: (_, state) => RepaymentPlanScreen(payableId: state.pathParameters['id'] ?? ''),
+      ),
       GoRoute(
         path: '/date/:date',
         builder: (_, state) => DateDetailsScreen(date: _parseDate(state)),

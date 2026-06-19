@@ -137,7 +137,9 @@ final payableInterventionsProvider = FutureProvider.autoDispose<List<Interventio
         trigger: InterventionTrigger.borrowedMoney,
         priority: overdue ? InterventionPriority.urgent : InterventionPriority.high,
         title: '🪙 You owe $who $amount',
-        message: 'You borrowed $amount from $who — $whenWords. Worth keeping in view; I can help you plan it.',
+        message: 'You borrowed $amount from $who — $whenWords. Would you like me to work out a repayment plan?',
+        actionLabel: 'Plan repayment',
+        actionRoute: '/payable/${p['id']}/repay',
         payload: {'payable_id': p['id'], 'amount': p['converted_amount'], 'currency': p['base_currency'],
                   'due_date': dueStr, 'who': who},
       ));
