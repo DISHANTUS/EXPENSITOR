@@ -18,16 +18,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Expense, Receivable, SavingsGoal
 from app.models.enums import ReceivableKind, ReceivableStatus, SavingsGoalKind, SavingsGoalStatus
+from app.core.config import settings
 from app.intelligence.budget import life_changes
-from app.intelligence.companion import app_help
+from app.intelligence.companion import app_help, llm_router
 from app.intelligence.learning import lessons as _lessons
+from app.intelligence.nlp import entities, parser as nlp
 from app.schemas.advisor_chat import ChatContext, ChatOption, ChatTurn
 from app.schemas.forecast import Forecast
 from app.schemas.learning import CompanionRecap, FollowUpQuestion, ReflectionPrompt
 from app.services import (
     advice_memory_service,
     analytics_service,
+    assistant_service,
     calendar_service,
+    ollama_service,
     companion_recap_service,
     explain_service,
     forecast_service,
@@ -350,10 +354,127 @@ async def _goal_answer(db, user_id, today, ctx, *, message: str) -> ChatTurn:
     return _forecast_turn(fc)
 
 
+# --- Chat → Action Layer ------------------------------------------------------
+# The text chat can DO things, not just answer: a parsed command runs through the
+# same parse → clarify → preview → confirm → execute pipeline the voice layer uses
+# (assistant_service.act). The deterministic NLP parser decides what's an action,
+# so this needs no LLM and works in production today. Multi-step state (a missing
+# slot, or awaiting "yes") rides on ChatContext, echoed by the client each turn.
+_ACT_YES = re.compile(r"\b(yes|yeah|yep|sure|go ahead|do it|please do|confirm|apply|ok|okay)\b")
+_ACT_NO = re.compile(r"\b(no|nope|cancel|never ?mind|don'?t|stop|leave it)\b")
+
+
+def _clear_action(ctx: ChatContext) -> ChatContext:
+    return ctx.model_copy(update={"pending_action_text": None, "pending_action_field": None,
+                                  "pending_action_answers": None, "pending_action_request_id": None})
+
+
+def _coerce_action_answer(field: str, value: str, cats: set[str], today: date) -> dict[str, str]:
+    """Turn a free-text chat answer into the typed string `act` understands (ISO
+    date / numeric amount / known category), mirroring the voice coercion."""
+    v = (value or "").strip()
+    if not v:
+        return {}
+    if field == "amount":
+        amt, _ = entities.extract_amount(v)
+        if amt is None:
+            m = re.search(r"\d[\d,]*(?:\.\d+)?", v)
+            amt = Decimal(m.group(0).replace(",", "")) if m else None
+        return {"amount": str(amt)} if amt is not None else {}
+    if field == "date":
+        d = entities.extract_date(v, today)
+        return {"date": d.isoformat()} if d else {}
+    if field == "category":
+        c = entities.extract_category(v, cats) or next(
+            (x for x in cats if v.lower() in x.lower() or x.lower() in v.lower()), None)
+        return {"category": c} if c else {}
+    if field == "source_name":
+        return {"source_name": v.split()[0].capitalize()}
+    return {field: v}
+
+
+def _action_turn(res: dict, ctx: ChatContext, *, command: str,
+                 answers: dict[str, str] | None, request_id: str) -> ChatTurn:
+    """Map an assistant_service.act result dict onto a ChatTurn."""
+    t = res.get("type")
+    if t == "preview":
+        pend = ctx.model_copy(update={"pending_action_text": command, "pending_action_field": None,
+                                      "pending_action_answers": answers or None,
+                                      "pending_action_request_id": request_id})
+        return ChatTurn(type="answer", message=f"{res.get('summary') or 'Here is what I will do.'}\n\nWant me to do it?",
+                        confidence="high",
+                        follow_ups=[ChatOption(label="Yes, do it", message="yes"),
+                                    ChatOption(label="Cancel", message="no")],
+                        session=pend)
+    if t == "clarification":
+        q = (res.get("questions") or [{}])[0]
+        opts = [ChatOption(label=o.get("label", ""), message=o.get("label", ""))
+                for o in (q.get("options") or []) if o.get("label")]
+        pend = ctx.model_copy(update={"pending_action_text": command, "pending_action_field": q.get("field"),
+                                      "pending_action_answers": answers or None,
+                                      "pending_action_request_id": request_id})
+        return ChatTurn(type="clarify", message=q.get("prompt") or "Could you clarify?",
+                        options=opts, session=pend)
+    if t == "result":
+        msg = (res.get("outcome") or {}).get("what_changed") or res.get("message") or "Done."
+        return _answer(msg, _clear_action(ctx), confidence="high")
+    return _answer(res.get("message") or "I couldn't do that one.", _clear_action(ctx))
+
+
+async def _resume_action(db, user_id, ctx: ChatContext, *, message: str, t: str, today: date) -> ChatTurn | None:
+    """Continue a command awaiting a slot or a final yes/no. Returns None (and the
+    caller reinterprets the message) if the user clearly abandoned the action."""
+    rid = ctx.pending_action_request_id or uuid.uuid4().hex
+    cmd = ctx.pending_action_text
+    if ctx.pending_action_field is None:  # awaiting confirmation
+        if _ACT_YES.search(t):
+            res = await assistant_service.act(db, user_id, text=cmd, confirm=True,
+                                              answers=ctx.pending_action_answers or None, request_id=rid, today=today)
+            return _action_turn(res, ctx, command=cmd, answers=ctx.pending_action_answers, request_id=rid)
+        if _ACT_NO.search(t):
+            return _answer("Okay, I won't do that.", _clear_action(ctx), confidence="high")
+        return None  # neither yes nor no → let the caller treat it as a fresh message
+    # awaiting a slot value: this whole message is the answer
+    cats = await assistant_service._category_names(db, user_id)  # noqa: SLF001
+    merged = {**(ctx.pending_action_answers or {}), **_coerce_action_answer(ctx.pending_action_field, message, cats, today)}
+    res = await assistant_service.act(db, user_id, text=cmd, confirm=False, answers=merged, request_id=rid, today=today)
+    return _action_turn(res, ctx, command=cmd, answers=merged, request_id=rid)
+
+
+_QUESTION_RE = re.compile(
+    r"^\s*(who|what|whats|what's|when|where|why|which|how|can|could|should|shall|do|does|"
+    r"did|is|are|am|was|were|will|would|may|might)\b")
+
+
+def _looks_like_question(t: str) -> bool:
+    """A question must never be run as a command — the deterministic parser happily
+    misreads 'who owes me money' as add_receivable and 'what did I spend' as add_expense."""
+    return t.endswith("?") or bool(_QUESTION_RE.match(t))
+
+
+async def _run_command(db, user_id, ctx: ChatContext, command: str, today: date) -> ChatTurn | None:
+    """Run a command through the action pipeline. Returns a ChatTurn if it parsed
+    as a real mutation, else None (the caller falls through to question-answering)."""
+    cats = await assistant_service._category_names(db, user_id)  # noqa: SLF001
+    pr = nlp.parse(command, today=today, valid_category_names=cats)
+    if not pr.mutating:
+        return None
+    rid = uuid.uuid4().hex
+    res = await assistant_service.act(db, user_id, text=command, confirm=False, request_id=rid, today=today)
+    return _action_turn(res, ctx, command=command, answers=None, request_id=rid)
+
+
 async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: ChatContext | None) -> ChatTurn:
     today = await calendar_service.user_today(db, user_id)
     t = message.lower().strip()
     ctx = _ctx(session)
+
+    # --- resume a conversational action awaiting a slot or a final yes/no ---
+    if ctx.pending_action_text:
+        resumed = await _resume_action(db, user_id, ctx, message=message, t=t, today=today)
+        if resumed is not None:
+            return resumed
+        ctx = _clear_action(ctx)  # abandoned → reinterpret the message fresh
 
     # --- conversational profile mutation (Phase 5): tell Advary about life changes ---
     if ctx.pending_profile_text:
@@ -371,6 +492,26 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: C
                                     ChatOption(label="No", message="no, leave it")],
                         session=ctx.model_copy(update={"pending_profile_text": message}))
 
+    # --- LLM brain (only when a model is reachable): understand the message and
+    # route it to a capability, or answer a general question. On "passthrough" or
+    # ANY failure it falls through to the deterministic ladder below — so production
+    # (no model) behaves identically with zero added latency. ---
+    if settings.OLLAMA_ENABLED:
+        decision = await llm_router.route(message, generate=ollama_service.complete)
+        if decision is not None:
+            if decision.kind == "navigate":
+                return ChatTurn(type="help", message="Sure — tap to open it.", route=decision.route,
+                                confidence="high",
+                                follow_ups=[ChatOption(label="What can you do?", message="what can you do")],
+                                session=ctx)
+            if decision.kind == "answer":
+                return _answer(decision.text, ctx, confidence="high")
+            if decision.kind == "action":
+                ran = await _run_command(db, user_id, ctx, decision.command, today)
+                if ran is not None:
+                    return ran
+            # passthrough (or an action the parser couldn't read) → deterministic ladder
+
     # --- teach the app: launch the tour / answer "how do I…" (works by voice too) ---
     if app_help.wants_tour(t):
         return ChatTurn(type="tour", message="Sure — let me show you around.", route="/home", session=ctx)
@@ -382,6 +523,15 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: C
     if _nav is not None:
         return ChatTurn(type="help", message=_nav.message, route=_nav.route, confidence="high",
                         follow_ups=[ChatOption(label="What can you do?", message="what can you do")], session=ctx)
+
+    # --- Chat → Action Layer: a command (add expense/income, move event) gets done ---
+    # The deterministic parser decides what's an action; everything else falls
+    # through to the question-answering engines below. Questions are excluded so a
+    # misparse can't hijack "who owes me money" or "what did I spend on food".
+    if not _looks_like_question(t):
+        action = await _run_command(db, user_id, ctx, message, today)
+        if action is not None:
+            return action
 
     # --- the AI itself ---
     if any(p in t for p in ("what can you do", "what do you do", "how can you help", "help me")):

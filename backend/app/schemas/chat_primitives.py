@@ -19,6 +19,13 @@ class ChatContext(BaseModel):
     period_to: date | None = None
     last_explain_ref: str | None = None  # so "why did you say that?" can re-explain
     pending_profile_text: str | None = None  # life-change awaiting "yes" to apply (Phase 5)
+    # Conversational action (Chat → Action Layer): a parsed command awaiting a
+    # missing slot or a final "yes". Mirrors the voice command loop, echoed by the
+    # client each turn so the multi-step confirm stays stateless server-side.
+    pending_action_text: str | None = None       # the original command (e.g. "add 250 lunch")
+    pending_action_field: str | None = None       # the slot we're waiting on (None => awaiting confirm)
+    pending_action_answers: dict[str, str] | None = None  # slot answers gathered so far
+    pending_action_request_id: str | None = None  # idempotency key across the confirm
 
 
 class ChatOption(BaseModel):

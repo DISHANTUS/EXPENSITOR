@@ -95,6 +95,14 @@ def _make_generate(*, temperature: float, seed: int):
     return gen
 
 
+async def complete(messages: list[dict[str, str]]) -> str:
+    """One-shot, low-temperature completion for structured/routing use (NOT
+    narration). Strips any <think> block a thinking model emits. Raises on
+    disabled-by-config / timeout / HTTP error — the caller decides the fallback.
+    The chat router gates on settings.OLLAMA_ENABLED before calling this."""
+    return await _make_generate(temperature=0.0, seed=7)(messages)
+
+
 def _too_similar(text: str, recents: list[str]) -> bool:
     low = (text or "").lower()
     return any(SequenceMatcher(None, low, (r or "").lower()).ratio() >= _SIMILARITY_THRESHOLD
