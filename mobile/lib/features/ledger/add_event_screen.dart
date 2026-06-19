@@ -39,9 +39,10 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
+      final amount = _amount.text.trim();
       await ref.read(ledgerRepositoryProvider).createEvent(
             title: _title.text,
-            amount: _amount.text.trim(),
+            amount: amount.isEmpty ? null : amount,
             currency: currency,
             date: widget.date,
             occasionType: _occasion,
@@ -88,7 +89,8 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                 controller: _title,
                 autofocus: true,
                 maxLength: 255,
-                decoration: const InputDecoration(labelText: 'What is it? (e.g. Outing with friends)'),
+                decoration: const InputDecoration(
+                  labelText: "What is it? (e.g. Naruse's birthday, JLPT exam, Pay rent)"),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Give the event a name' : null,
               ),
               const SizedBox(height: 8),
@@ -97,17 +99,21 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                 decoration: InputDecoration(
-                  labelText: 'Planned amount',
+                  labelText: 'Amount (optional)',
+                  helperText: 'Only if money is involved — leave blank for a plain reminder.',
                   prefixText: currency == null ? null : '$currency  ',
                 ),
-                validator: _validateAmount,
+                validator: _validateOptionalAmount,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String?>(
                 initialValue: _occasion,
-                decoration: const InputDecoration(labelText: 'Occasion (optional)'),
+                decoration: const InputDecoration(
+                  labelText: 'Tag',
+                  helperText: 'Advary tags this from the title — override only if you want.',
+                ),
                 items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('None')),
+                  const DropdownMenuItem<String?>(value: null, child: Text('✨ Auto — Advary decides')),
                   ...occasionOptions.map((o) => DropdownMenuItem<String?>(value: o.value, child: Text(o.label))),
                 ],
                 onChanged: (v) => setState(() => _occasion = v),
@@ -133,9 +139,9 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   }
 }
 
-String? _validateAmount(String? raw) {
+String? _validateOptionalAmount(String? raw) {
   final v = (raw ?? '').trim();
-  if (v.isEmpty) return 'Enter an amount';
+  if (v.isEmpty) return null; // optional — a plain reminder has no money
   final n = double.tryParse(v);
   if (n == null) return 'Enter a valid number';
   if (n <= 0) return 'Amount must be greater than 0';

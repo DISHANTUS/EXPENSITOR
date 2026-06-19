@@ -53,33 +53,41 @@ Map<String, dynamic> expenseBody({
       if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
     };
 
-/// Planner-event occasion types accepted by POST /planned-expenses.
+/// Planner-event occasion types accepted by POST /planned-expenses. Advary
+/// normally assigns one from the title; this list is only the manual override.
 const occasionOptions = <({String value, String label})>[
-  (value: 'outing', label: 'Outing'),
-  (value: 'shopping', label: 'Shopping'),
-  (value: 'entertainment', label: 'Entertainment'),
-  (value: 'travel', label: 'Travel'),
-  (value: 'date', label: 'Date'),
-  (value: 'birthday', label: 'Birthday'),
-  (value: 'festival', label: 'Festival'),
-  (value: 'vacation', label: 'Vacation'),
-  (value: 'celebration', label: 'Celebration'),
-  (value: 'custom', label: 'Custom'),
+  (value: 'outing', label: '❤️ Outing'),
+  (value: 'date', label: '❤️ Date'),
+  (value: 'birthday', label: '🎂 Birthday'),
+  (value: 'anniversary', label: '💞 Anniversary'),
+  (value: 'travel', label: '✈️ Travel'),
+  (value: 'vacation', label: '✈️ Vacation'),
+  (value: 'celebration', label: '🎉 Celebration'),
+  (value: 'festival', label: '🪔 Festival'),
+  (value: 'graduation', label: '🎓 Graduation'),
+  (value: 'study', label: '📚 Study / exam'),
+  (value: 'medical', label: '🏥 Medical'),
+  (value: 'gaming', label: '🎮 Gaming'),
+  (value: 'food', label: '🍔 Food'),
+  (value: 'entertainment', label: '🎬 Entertainment'),
+  (value: 'shopping', label: '🛒 Shopping'),
 ];
 
-/// Build the POST /planned-expenses body (a calendar event).
+/// Build the POST /planned-expenses body (a calendar event). Amount is optional —
+/// an event doubles as a note/reminder (birthday, exam, "call parents"), so it's
+/// omitted when blank and the backend stores 0.
 Map<String, dynamic> eventBody({
   required String title,
-  required String amount,
   required String currency,
   required DateTime date,
+  String? amount,
   String? occasionType,
   String? notes,
 }) =>
     {
       'title': title.trim(),
       'planned_date': ymd(date),
-      'original_amount': amount,
+      if (amount != null && amount.trim().isNotEmpty) 'original_amount': amount.trim(),
       'original_currency': currency.toUpperCase(),
       if (occasionType != null && occasionType.isNotEmpty) 'occasion_type': occasionType,
       if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),

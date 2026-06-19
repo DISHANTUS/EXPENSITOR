@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.enums import OccasionType, PlannedExpensePriority, PlannedExpenseStatus
 
 Money = Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=4)]
+# Events double as notes/reminders (a birthday, an exam, "call parents"), so an
+# event can carry no money — amount defaults to 0 and the UI hides a zero amount.
+OptionalMoney = Annotated[Decimal, Field(ge=0, max_digits=18, decimal_places=4)]
 
 
 class PlannedExpenseCreate(BaseModel):
@@ -19,7 +22,7 @@ class PlannedExpenseCreate(BaseModel):
 
     title: str = Field(min_length=1, max_length=255)
     planned_date: date
-    original_amount: Money
+    original_amount: OptionalMoney = Decimal("0")
     original_currency: str = Field(min_length=3, max_length=3)
     priority: PlannedExpensePriority = PlannedExpensePriority.medium
     notes: str | None = Field(default=None, max_length=2000)
@@ -40,7 +43,7 @@ class PlannedExpenseUpdate(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=255)
     planned_date: date | None = None
-    original_amount: Money | None = None
+    original_amount: OptionalMoney | None = None
     original_currency: str | None = Field(default=None, min_length=3, max_length=3)
     priority: PlannedExpensePriority | None = None
     status: PlannedExpenseStatus | None = None

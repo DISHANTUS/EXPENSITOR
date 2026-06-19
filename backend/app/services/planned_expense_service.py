@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import PlannedExpense
 from app.models.enums import PlannedExpensePriority, PlannedExpenseStatus
 from app.schemas.planned_expense import PlannedExpenseCreate, PlannedExpenseUpdate
-from app.services import category_service, currency_service, settings_service
+from app.services import category_service, currency_service, event_classifier, settings_service
 from app.services.exceptions import FieldNotNullableError, ResourceNotFoundError
 
 # Non-nullable fields that must not be set to null via PATCH.
@@ -41,6 +41,9 @@ async def create(
     rate, converted = await currency_service.convert_to_base(
         db, data.original_amount, data.original_currency, base_currency
     )
+    # Advary tags the event automatically from its title when the user didn't pick
+    # an occasion — so the calendar gets a fitting emoji/animation, no picker needed.
+    occasion = data.occasion_type or event_classifier.classify(data.title, data.notes)
     row = PlannedExpense(
         user_id=user_id,
         category_id=data.category_id,
@@ -55,7 +58,7 @@ async def create(
         status=PlannedExpenseStatus.planned,
         notes=data.notes,
         is_recurring=data.is_recurring,
-        occasion_type=data.occasion_type,
+        occasion_type=occasion,
     )
     db.add(row)
     await db.commit()

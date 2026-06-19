@@ -18,6 +18,7 @@ class CalendarMarkerType {
     required this.color,
     required this.title,
     required this.category,
+    this.animation = 'float',
   });
 
   factory CalendarMarkerType.fromJson(Map<String, dynamic> j) => CalendarMarkerType(
@@ -26,6 +27,7 @@ class CalendarMarkerType {
         color: _hexColor(_s(j['color'])),
         title: _s(j['title']) ?? '',
         category: _s(j['category']) ?? '',
+        animation: _s(j['animation']) ?? 'float',
       );
 
   final String key;
@@ -33,16 +35,17 @@ class CalendarMarkerType {
   final Color color;
   final String title;
   final String category;
+  final String animation; // registry-declared: heartbeat | shimmer | drift | …
 }
 
 /// Minimal built-in registry so the calendar still renders if the catalog fetch
 /// fails. The backend remains the source of truth for the full set.
 const fallbackMarkers = <String, CalendarMarkerType>{
-  'budget_over': CalendarMarkerType(key: 'budget_over', icon: '🔴', color: Color(0xFFE53935), title: 'Over budget', category: 'budget'),
-  'budget_saved': CalendarMarkerType(key: 'budget_saved', icon: '👑', color: Color(0xFFFBC02D), title: 'Saved money', category: 'budget'),
-  'budget_within': CalendarMarkerType(key: 'budget_within', icon: '🟢', color: Color(0xFF43A047), title: 'Within budget', category: 'budget'),
-  'income': CalendarMarkerType(key: 'income', icon: '💼', color: Color(0xFF1E88E5), title: 'Income', category: 'income'),
-  'event': CalendarMarkerType(key: 'event', icon: '📅', color: Color(0xFF7E57C2), title: 'Planned event', category: 'planning'),
+  'budget_over': CalendarMarkerType(key: 'budget_over', icon: '🔴', color: Color(0xFFE53935), title: 'Over budget', category: 'budget', animation: 'warning'),
+  'budget_saved': CalendarMarkerType(key: 'budget_saved', icon: '👑', color: Color(0xFFFBC02D), title: 'Saved money', category: 'budget', animation: 'sparkle'),
+  'budget_within': CalendarMarkerType(key: 'budget_within', icon: '🟢', color: Color(0xFF43A047), title: 'Within budget', category: 'budget', animation: 'glow'),
+  'income': CalendarMarkerType(key: 'income', icon: '💼', color: Color(0xFF1E88E5), title: 'Income', category: 'income', animation: 'shimmer'),
+  'event': CalendarMarkerType(key: 'event', icon: '📅', color: Color(0xFF7E57C2), title: 'Planned event', category: 'planning', animation: 'float'),
 };
 
 class DayCell {

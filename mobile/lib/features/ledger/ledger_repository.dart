@@ -42,17 +42,17 @@ class LedgerRepository {
 
   Future<void> createEvent({
     required String title,
-    required String amount,
     required String currency,
     required DateTime date,
+    String? amount,
     String? occasionType,
     String? notes,
   }) =>
       _post('/planned-expenses', eventBody(
         title: title,
-        amount: amount,
         currency: currency,
         date: date,
+        amount: amount,
         occasionType: occasionType,
         notes: notes,
       ));

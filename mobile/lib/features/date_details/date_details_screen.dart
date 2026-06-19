@@ -181,8 +181,11 @@ class _Section extends StatelessWidget {
                   leading: Icon(icon, color: color),
                   title: Text(lines[i].title),
                   subtitle: lines[i].tag != null ? Text(lines[i].tag!) : null,
-                  trailing: Text(formatMoney(lines[i].amount, lines[i].currency),
-                      style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                  // A note/reminder event has no money — show no amount for it.
+                  trailing: (double.tryParse(lines[i].amount) ?? 0) == 0
+                      ? null
+                      : Text(formatMoney(lines[i].amount, lines[i].currency),
+                          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
                 ),
               ],
             ],

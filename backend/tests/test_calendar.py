@@ -122,3 +122,44 @@ async def test_marker_registry_is_complete(client: AsyncClient) -> None:
         assert expected in keys
     sample = next(m for m in markers if m["key"] == "budget_over")
     assert sample["icon"] and sample["color"] and sample["category"] == "budget"
+
+
+async def test_marker_registry_declares_animation(client: AsyncClient) -> None:
+    # Registry-driven: every marker carries a client animation name, so a new
+    # event type animates with zero client changes.
+    markers = (await client.get("/api/v1/calendar/marker-types")).json()
+    by_key = {m["key"]: m for m in markers}
+    assert by_key["birthday"]["animation"] == "flicker"
+    assert by_key["outing"]["animation"] == "heartbeat"
+    assert by_key["income"]["animation"] == "shimmer"
+    assert all(m.get("animation") for m in markers)
+
+
+async def test_event_can_be_saved_without_money(client: AsyncClient) -> None:
+    # An event doubles as a note/reminder (a birthday, an exam) — no amount needed.
+    h = await _auth(client, "cal_note@example.com")
+    today = _today()
+    r = await client.post(
+        "/api/v1/planned-expenses",
+        json={"title": "Naruse birthday", "planned_date": today.isoformat(), "original_currency": "INR"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    assert float(r.json()["converted_amount"]) == 0
+
+
+async def test_event_emoji_is_auto_assigned_from_title(client: AsyncClient) -> None:
+    # No occasion supplied → Advary classifies it from the title (birthday → 🎂),
+    # never the generic 📅.
+    h = await _auth(client, "cal_auto@example.com")
+    today = _today()
+    await client.post(
+        "/api/v1/planned-expenses",
+        json={"title": "Mom's birthday", "planned_date": today.isoformat(),
+              "original_amount": "500", "original_currency": "INR"},
+        headers=h,
+    )
+    month = (await client.get(f"/api/v1/calendar/month?year={today.year}&month={today.month}", headers=h)).json()
+    cell = next(c for c in month["days"] if c["date"] == today.isoformat())
+    assert "birthday" in cell["markers"]
+    assert "event" not in cell["markers"]

@@ -143,7 +143,8 @@ class BudgetSessionStatus(str, enum.Enum):
 
 
 class OccasionType(str, enum.Enum):
-    """Marks a planned_expense as a planner Event. VARCHAR-backed, extensible."""
+    """Marks a planned_expense as a planner Event. VARCHAR-backed, extensible
+    (native_enum=False / no DB constraint → new values need no migration)."""
 
     outing = "outing"
     shopping = "shopping"
@@ -154,7 +155,32 @@ class OccasionType(str, enum.Enum):
     festival = "festival"
     vacation = "vacation"
     celebration = "celebration"
+    # Added so Advary's classifier can tag events with a fitting emoji/animation.
+    anniversary = "anniversary"
+    graduation = "graduation"
+    study = "study"
+    medical = "medical"
+    gaming = "gaming"
+    food = "food"
     custom = "custom"
+
+
+class ReturnExpectation(str, enum.Enum):
+    """For money the user borrowed — how the lender expects it back. Lets Advary
+    tell a hard debt (repay by a date) from relationship support (no repayment)."""
+
+    required = "required"          # must be repaid, usually by a date
+    optional = "optional"          # repay when comfortable
+    whenever = "whenever"          # no rush at all
+    not_expected = "not_expected"  # a gift / support — no repayment expected
+
+
+class PayableStatus(str, enum.Enum):
+    """Stored status for borrowed money. ``overdue`` is derived on read."""
+
+    open = "open"
+    settled = "settled"
+    cancelled = "cancelled"
 
 
 class SavingsGoalKind(str, enum.Enum):

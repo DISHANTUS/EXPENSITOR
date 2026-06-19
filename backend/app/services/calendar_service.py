@@ -70,6 +70,12 @@ _OCCASION_MARKER: dict[OccasionType, str] = {
     OccasionType.festival: "festival",
     OccasionType.vacation: "trip",
     OccasionType.celebration: "celebration",
+    OccasionType.anniversary: "anniversary",
+    OccasionType.graduation: "graduation",
+    OccasionType.study: "study",
+    OccasionType.medical: "expense_medical",
+    OccasionType.gaming: "expense_entertainment",
+    OccasionType.food: "expense_food",
     OccasionType.custom: "event",
 }
 

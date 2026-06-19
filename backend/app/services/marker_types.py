@@ -20,6 +20,11 @@ class MarkerType:
     title: str
     category: str  # budget | income | expense | commitment | planning | advisor | relationship | life_event
     commentary_template: str
+    # The calendar animation the client plays for this marker. Declared here so a
+    # NEW event type animates with zero client changes (registry-driven). One of:
+    # heartbeat | shimmer | sparkle | drift | bounce | glow | flicker | swing |
+    # steam | pulse | warning | float.
+    animation: str = "float"
 
 
 # (key, icon, color, title, category, template)
@@ -63,6 +68,7 @@ _DEFS: list[tuple[str, str, str, str, str, str]] = [
     ("surprise_gift", "🤫", "#AB47BC", "Surprise gift", "planning", "A surprise gift — kept under wraps. {title}."),
     ("anniversary", "💞", "#EC407A", "Anniversary", "planning", "{title}."),
     ("graduation", "🎓", "#26A69A", "Graduation", "planning", "{title}."),
+    ("study", "📚", "#5C6BC0", "Study / exam", "planning", "{title}."),
     ("festival", "🪔", "#FF7043", "Festival", "planning", "{title}."),
     ("goal_milestone", "🎯", "#26C6DA", "Goal milestone", "planning", "Goal milestone reached."),
     ("goal_completed", "🏁", "#43A047", "Goal completed", "planning", "Goal completed — well done."),
@@ -87,7 +93,61 @@ _DEFS: list[tuple[str, str, str, str, str, str]] = [
     ("life_pet", "🐕", "#8D6E63", "Pet", "life_event", "A pet-related expense."),
 ]
 
-MARKER_TYPES: dict[str, MarkerType] = {d[0]: MarkerType(*d) for d in _DEFS}
+# Per-marker animation. Anything not listed falls back to a calm, category-based
+# default below — so a new marker still animates without touching this map.
+_ANIMATION: dict[str, str] = {
+    "budget_over": "warning",
+    "budget_within": "glow",
+    "budget_saved": "sparkle",
+    "budget_streak": "flicker",
+    "budget_exceptional": "sparkle",
+    "budget_major_win": "sparkle",
+    "income": "shimmer",
+    "income_salary": "shimmer",
+    "income_gift": "sparkle",
+    "income_freelance": "shimmer",
+    "income_bonus": "sparkle",
+    "expense_food": "steam",
+    "expense_travel": "drift",
+    "expense_entertainment": "glow",
+    "expense_medical": "pulse",
+    "expense_education": "bounce",
+    "payment_due": "warning",
+    "trip": "drift",
+    "outing": "heartbeat",
+    "birthday": "flicker",
+    "celebration": "sparkle",
+    "gift": "sparkle",
+    "anniversary": "heartbeat",
+    "graduation": "bounce",
+    "study": "bounce",
+    "festival": "flicker",
+    "goal_milestone": "sparkle",
+    "goal_completed": "sparkle",
+    "advisor_warning": "warning",
+    "lent": "swing",
+    "returned": "shimmer",
+    "repay_due_soon": "warning",
+    "repay_overdue": "warning",
+    "life_wedding": "sparkle",
+    "life_vehicle": "drift",
+    "life_laptop": "glow",
+    "life_phone": "glow",
+}
+_ANIMATION_BY_CATEGORY: dict[str, str] = {
+    "budget": "pulse",
+    "income": "shimmer",
+    "relationship": "heartbeat",
+}
+
+
+def _animation_for(key: str, category: str) -> str:
+    return _ANIMATION.get(key) or _ANIMATION_BY_CATEGORY.get(category, "float")
+
+
+MARKER_TYPES: dict[str, MarkerType] = {
+    d[0]: MarkerType(*d, animation=_animation_for(d[0], d[4])) for d in _DEFS
+}
 
 # Keys Sprint 3 actually computes from existing data.
 SPRINT3_KEYS = frozenset({"budget_over", "budget_within", "budget_saved", "income", "event"})

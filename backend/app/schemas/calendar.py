@@ -21,6 +21,7 @@ class MarkerTypeOut(BaseModel):
     title: str
     category: str
     commentary_template: str
+    animation: str  # client animation name (heartbeat | shimmer | drift | …)
 
 
 class DayCell(BaseModel):

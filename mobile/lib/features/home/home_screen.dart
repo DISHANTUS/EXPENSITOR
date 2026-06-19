@@ -25,8 +25,20 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin {
   DateTime _focused = DateTime.now();
+  DateTime? _selected;
+
+  // A single shared ticker gives ONLY event days a gentle float (one controller
+  // for the whole grid — cheap, battery-light). Plain days stay perfectly still.
+  late final AnimationController _dateAnim =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 3600))..repeat();
+
+  @override
+  void dispose() {
+    _dateAnim.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,9 +107,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               pageAnimationEnabled: true,
               pageAnimationDuration: const Duration(milliseconds: 320),
               pageAnimationCurve: Curves.easeInOutCubic,
+              selectedDayPredicate: (d) => _selected != null && isSameDay(d, _selected),
               onPageChanged: (f) => setState(() => _focused = f),
-              onDaySelected: (selected, _) {
-                // A marked day holds a memory — Advary reacts before you dive in.
+              onDaySelected: (selected, focused) {
+                // Tap lifts + pops the date (selectedBuilder), then Advary reacts.
+                setState(() {
+                  _selected = selected;
+                  _focused = focused;
+                });
                 final cell = monthData?.cell(selected);
                 if (cell != null && cell.markers.isNotEmpty) {
                   _showDateReaction(context, selected);
@@ -106,6 +123,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
               },
               calendarBuilders: CalendarBuilders(
+                // Tasteful, not a casino: plain days stay perfectly still. Only
+                // special days move — today breathes, the selected day lifts with a
+                // shadow, and days that hold an event gently float.
+                defaultBuilder: (context, day, _) {
+                  final cell = monthData?.cell(day);
+                  final hasEvents = cell != null && cell.markers.isNotEmpty;
+                  return _DateCell(
+                      day: day, color: cs.onSurface, controller: _dateAnim, float: hasEvents);
+                },
+                outsideBuilder: (context, day, _) => _DateCell(
+                    day: day, color: cs.onSurfaceVariant, controller: _dateAnim, outside: true),
+                selectedBuilder: (context, day, _) => _ElevatedDate(day: day, color: cs.primary),
                 // Today breathes a soft crimson glow, so the calendar feels alive
                 // immediately — no events required.
                 todayBuilder: (context, day, _) => _BreathingToday(day: day, color: cs.primary),
@@ -114,18 +143,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 markerBuilder: (context, day, _) {
                   final cell = monthData?.cell(day);
                   if (cell == null || cell.markers.isEmpty) return const SizedBox.shrink();
-                  final emojis = (cell.markers.toList()..sort(_markerPriority))
-                      .take(3)
-                      .map((k) => (registry[k] ?? fallbackMarkers[k])?.icon ?? '')
-                      .where((e) => e.isNotEmpty)
-                      .toList();
-                  if (emojis.isEmpty) return const SizedBox.shrink();
+                  // Resolve keys → registry types (emoji + animation + colour all
+                  // come from the backend), highest-priority first.
+                  final types = cell.markers
+                      .map((k) => registry[k] ?? fallbackMarkers[k])
+                      .whereType<CalendarMarkerType>()
+                      .where((t) => t.icon.isNotEmpty)
+                      .toList()
+                    ..sort((a, b) => _markerPriority(a.icon, b.icon));
+                  final shown = types.take(3).toList();
+                  if (shown.isEmpty) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 27),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [for (final e in emojis) _LivingMarker(e)],
+                      children: [
+                        for (final t in shown)
+                          _LivingMarker(t.icon, animation: t.animation, color: t.color),
+                      ],
                     ),
                   );
                 },
@@ -435,30 +471,71 @@ int _markerPriority(String a, String b) {
   return rank(a).compareTo(rank(b));
 }
 
-enum _MarkerKind { birthday, income, travel, relationship, crown, celebration, loaned, concern, gentle }
+/// The animation a marker plays. Registry-driven: the backend declares the name
+/// per event type, so a NEW type animates with zero changes here.
+enum _Anim { heartbeat, shimmer, drift, flicker, sparkle, bounce, glow, steam, pulse, swing, warning, float }
 
-_MarkerKind _kindFor(String e) {
-  if (e.contains('🎂')) return _MarkerKind.birthday;
-  if (e.contains('👑')) return _MarkerKind.crown;
-  if (e.contains('🎉') || e.contains('🎯') || e.contains('🎓') || e.contains('🏁') ||
-      e.contains('⭐') || e.contains('💎')) {
-    return _MarkerKind.celebration;
+_Anim _animFromName(String? name) => switch (name) {
+      'heartbeat' => _Anim.heartbeat,
+      'shimmer' => _Anim.shimmer,
+      'drift' => _Anim.drift,
+      'flicker' => _Anim.flicker,
+      'sparkle' => _Anim.sparkle,
+      'bounce' => _Anim.bounce,
+      'glow' => _Anim.glow,
+      'steam' => _Anim.steam,
+      'pulse' => _Anim.pulse,
+      'swing' => _Anim.swing,
+      'warning' => _Anim.warning,
+      _ => _Anim.float,
+    };
+
+/// Fallback when the registry didn't supply an animation (or for the legend):
+/// infer a sensible motion straight from the emoji.
+_Anim _animFromEmoji(String e) {
+  if (e.contains('🎂')) return _Anim.flicker;
+  if (e.contains('👑') || e.contains('🎉') || e.contains('🎯') || e.contains('🏁') ||
+      e.contains('⭐') || e.contains('💎') || e.contains('🎁')) {
+    return _Anim.sparkle;
   }
-  if (e.contains('💸')) return _MarkerKind.loaned;
-  if (e.contains('💰') || e.contains('💼') || e.contains('💵')) return _MarkerKind.income;
-  if (e.contains('❤') || e.contains('💗') || e.contains('💞') || e.contains('🤝')) return _MarkerKind.relationship;
-  if (e.contains('✈')) return _MarkerKind.travel;
-  if (e.contains('🔴') || e.contains('🚨')) return _MarkerKind.concern;
-  return _MarkerKind.gentle;
+  if (e.contains('🎓') || e.contains('📚')) return _Anim.bounce;
+  if (e.contains('🎮')) return _Anim.glow;
+  if (e.contains('🍜') || e.contains('🍔') || e.contains('🍱') || e.contains('☕')) return _Anim.steam;
+  if (e.contains('🏥') || e.contains('⚕') || e.contains('💊')) return _Anim.pulse;
+  if (e.contains('💸')) return _Anim.swing;
+  if (e.contains('💰') || e.contains('💼') || e.contains('💵') || e.contains('🪙')) return _Anim.shimmer;
+  if (e.contains('❤') || e.contains('💗') || e.contains('💞') || e.contains('🤝')) return _Anim.heartbeat;
+  if (e.contains('✈') || e.contains('🚗') || e.contains('🚆') || e.contains('🚕') || e.contains('🚢')) return _Anim.drift;
+  if (e.contains('🔴') || e.contains('🚨') || e.contains('⚠')) return _Anim.warning;
+  if (e.contains('🟢')) return _Anim.glow;
+  return _Anim.float;
 }
 
-/// One marked date brought to life. A single lightweight controller drives a
-/// subtle, emoji-specific motion — a cake flickers, a coin shimmers, a plane
-/// drifts, a heart beats, a crown sparkles — so only meaningful dates move and
-/// the calendar never becomes a distracting light show.
+/// Default halo colour per animation, used when the registry didn't pass a colour
+/// (e.g. the legend). Calendar markers pass the registry colour instead.
+Color? _defaultGlow(_Anim a) => switch (a) {
+      _Anim.heartbeat => const Color(0xFFFF3B6B),
+      _Anim.shimmer => const Color(0xFFFFC247),
+      _Anim.sparkle => const Color(0xFFFFC247),
+      _Anim.flicker => const Color(0xFFFF9D3B),
+      _Anim.glow => const Color(0xFF8B5CFF),
+      _Anim.pulse => const Color(0xFFEF5350),
+      _Anim.warning => const Color(0xFFE53935),
+      _Anim.steam => const Color(0xFFFF8A3D),
+      _Anim.bounce => const Color(0xFF26C6DA),
+      _ => null, // drift, swing, float — motion only, no halo
+    };
+
+/// One marker brought to life. The animation NAME comes from the backend marker
+/// registry (registry-driven), with a colour-matched pulsing halo; if the name is
+/// absent it's inferred from the emoji. Only meaningful markers move, so the
+/// calendar never becomes a distracting light show.
 class _LivingMarker extends StatefulWidget {
-  const _LivingMarker(this.emoji);
+  const _LivingMarker(this.emoji, {this.animation, this.color, this.size = 11});
   final String emoji;
+  final String? animation; // registry-declared name; null → infer from emoji
+  final Color? color;      // registry colour for the halo; null → a sensible default
+  final double size;
 
   @override
   State<_LivingMarker> createState() => _LivingMarkerState();
@@ -476,50 +553,80 @@ class _LivingMarkerState extends State<_LivingMarker> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
-    final kind = _kindFor(widget.emoji);
+    final anim = (widget.animation != null && widget.animation!.isNotEmpty)
+        ? _animFromName(widget.animation)
+        : _animFromEmoji(widget.emoji);
     return AnimatedBuilder(
       animation: _c,
       builder: (_, __) {
         final tau = _c.value * 2 * math.pi;
         final s = math.sin(tau);
         double dx = 0, dy = 0, rot = 0, scale = 1, opacity = 1;
-        var sparkle = false;
-        switch (kind) {
-          case _MarkerKind.birthday:
-            // candle flicker — quick, irregular opacity + micro-scale jitter
+        var sparkle = false, glows = false;
+        var glowPulse = s * 0.5 + 0.5; // 0→1
+        switch (anim) {
+          case _Anim.heartbeat:
+            scale = 1 + (s * 0.5 + 0.5) * 0.20;
+            glows = true;
+          case _Anim.shimmer:
+            scale = 1 + (s * 0.5 + 0.5) * 0.10;
+            opacity = 0.82 + 0.18 * (s * 0.5 + 0.5);
+            glows = true;
+          case _Anim.flicker:
             final f = (math.sin(tau) + math.sin(tau * 2.7) + math.sin(tau * 5.3)) / 3;
             opacity = 0.72 + 0.28 * (f * 0.5 + 0.5);
             scale = 1 + f * 0.05;
-          case _MarkerKind.income:
-            // coin shimmer — a gentle pulse + sheen of brightness
-            scale = 1 + (s * 0.5 + 0.5) * 0.10;
-            opacity = 0.82 + 0.18 * (s * 0.5 + 0.5);
-          case _MarkerKind.travel:
-            dx = s * 2.4;                          // drift left/right
-            rot = s * 0.06;
-          case _MarkerKind.relationship:
-            scale = 1 + (s * 0.5 + 0.5) * 0.20;    // heartbeat
-          case _MarkerKind.crown:
-            dy = s.abs() * 1.0;
-            rot = s * 0.14;                        // gentle tilt
-            sparkle = true;                        // + a gold sparkle
-          case _MarkerKind.celebration:
-            scale = 1 + s * 0.14;                  // confetti pop
+            glows = true;
+            glowPulse = f * 0.5 + 0.5;
+          case _Anim.sparkle:
+            scale = 1 + s * 0.14;
             sparkle = true;
-          case _MarkerKind.loaned:
-            rot = s * 0.22;                        // subtle pendulum swing
-          case _MarkerKind.concern:
-            scale = 1 + s * 0.05;                  // slow, subdued breathing
-          case _MarkerKind.gentle:
-            dy = s * 1.0;                          // soft float
+            glows = true;
+          case _Anim.bounce:
+            final p = _c.value;
+            final b = p < 0.35 ? math.sin(p / 0.35 * math.pi) : 0.0;
+            dy = b * 2.6; // one hop, then rest
+            glows = true;
+            glowPulse = b;
+          case _Anim.glow:
+            scale = 1 + (s * 0.5 + 0.5) * 0.08;
+            glows = true;
+          case _Anim.steam:
+            dy = (s * 0.5 + 0.5) * 1.6; // a warm rise
+            glows = true;
+          case _Anim.pulse:
+            scale = 1 + (s * 0.5 + 0.5) * 0.12;
+            glows = true;
+          case _Anim.warning:
+            scale = 1 + (s * 0.5 + 0.5) * 0.08;
+            glows = true;
+          case _Anim.drift:
+            dx = s * 2.4;
+            rot = s * 0.06;
+          case _Anim.swing:
+            rot = s * 0.22;
+          case _Anim.float:
+            dy = s * 1.0;
         }
+        final glow = glows ? (widget.color ?? _defaultGlow(anim)) : null;
         Widget glyph = Opacity(
           opacity: opacity,
           child: Transform.translate(
             offset: Offset(dx, -dy),
             child: Transform.rotate(
               angle: rot,
-              child: Transform.scale(scale: scale, child: Text(widget.emoji, style: const TextStyle(fontSize: 11))),
+              child: Transform.scale(
+                scale: scale,
+                child: Text(
+                  widget.emoji,
+                  style: TextStyle(
+                    fontSize: widget.size,
+                    shadows: glow == null
+                        ? null
+                        : [Shadow(color: glow.withValues(alpha: 0.20 + 0.55 * glowPulse), blurRadius: 5 + 11 * glowPulse)],
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -537,7 +644,7 @@ class _LivingMarkerState extends State<_LivingMarker> with SingleTickerProviderS
                   opacity: tw * 0.9,
                   child: Transform.scale(
                     scale: 0.4 + tw * 0.5,
-                    child: const Text('✨', style: TextStyle(fontSize: 8)),
+                    child: Text('✨', style: TextStyle(fontSize: widget.size * 0.6)),
                   ),
                 ),
               ),
@@ -598,6 +705,84 @@ class _BreathingTodayState extends State<_BreathingToday> with SingleTickerProvi
         },
         child: Text('${widget.day.day}',
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    );
+  }
+}
+
+/// A calendar day number. Plain days are perfectly still; days that hold an event
+/// breathe a gentle vertical float (one shared controller drives them all).
+/// Weekends and adjacent-month days read dimmer, matching the default styling.
+class _DateCell extends StatelessWidget {
+  const _DateCell({
+    required this.day,
+    required this.color,
+    required this.controller,
+    this.float = false,
+    this.outside = false,
+  });
+  final DateTime day;
+  final Color color;
+  final AnimationController controller;
+  final bool float;
+  final bool outside;
+
+  @override
+  Widget build(BuildContext context) {
+    final isWeekend = day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
+    final base = outside
+        ? color.withValues(alpha: 0.40)
+        : (isWeekend ? color.withValues(alpha: 0.62) : color);
+    final number = Text('${day.day}',
+        style: TextStyle(color: base, fontWeight: FontWeight.w600, fontSize: 15));
+    if (!float) return Center(child: number);
+    final phase = (day.day % 5) / 5.0; // stagger so event days don't bob in unison
+    return Center(
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, child) {
+          final t = (controller.value + phase) * 2 * math.pi;
+          return Transform.translate(offset: Offset(0, -math.sin(t) * 1.6), child: child);
+        },
+        child: number,
+      ),
+    );
+  }
+}
+
+/// The tapped date: it pops in (easeOutBack) and lifts off the grid with a soft
+/// shadow + crimson halo — the "selected" depth cue, paired with the orb reaction.
+class _ElevatedDate extends StatelessWidget {
+  const _ElevatedDate({required this.day, required this.color});
+  final DateTime day;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutBack,
+        builder: (context, t, child) => Transform.scale(
+          scale: 0.9 + 0.22 * t,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.22),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 10, offset: const Offset(0, 4)),
+                BoxShadow(color: color.withValues(alpha: 0.40), blurRadius: 12, spreadRadius: 0.5),
+              ],
+            ),
+            child: child,
+          ),
+        ),
+        child: Text('${day.day}',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
       ),
     );
   }
@@ -696,10 +881,17 @@ class _Legend extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       child: Wrap(
         spacing: 14,
-        runSpacing: 6,
+        runSpacing: 8,
         children: [
           for (final (emoji, label) in items)
-            Text('$emoji $label', style: Theme.of(context).textTheme.bodySmall),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _LivingMarker(emoji, size: 14),
+                const SizedBox(width: 5),
+                Text(label, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
         ],
       ),
     );
