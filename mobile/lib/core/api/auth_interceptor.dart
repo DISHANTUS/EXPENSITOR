@@ -50,9 +50,11 @@ class AuthInterceptor extends Interceptor {
       return handler.next(err);
     }
 
-    final refreshed = await _tryRefresh();
-    if (!refreshed) {
-      onSessionExpired();
+    final outcome = await _tryRefresh();
+    if (outcome != _RefreshOutcome.refreshed) {
+      // Only a genuine rejection (bad/expired refresh token) ends the session.
+      // A network blip / cold start keeps it — the request just fails this once.
+      if (outcome == _RefreshOutcome.rejected) onSessionExpired();
       return handler.next(err);
     }
 
@@ -68,17 +70,23 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
-  Future<bool> _tryRefresh() async {
+  Future<_RefreshOutcome> _tryRefresh() async {
     final refresh = await store.readRefresh();
-    if (refresh == null) return false;
+    if (refresh == null) return _RefreshOutcome.rejected;
     try {
       final res = await refreshDio.post<dynamic>('/auth/refresh', data: {'refresh_token': refresh});
       final data = res.data as Map<String, dynamic>;
       await store.write(access: data['access_token'] as String, refresh: data['refresh_token'] as String);
-      return true;
-    } on DioException {
-      await store.clear();
-      return false;
+      return _RefreshOutcome.refreshed;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 401 || code == 403) {
+        await store.clear(); // the refresh token is genuinely invalid
+        return _RefreshOutcome.rejected;
+      }
+      return _RefreshOutcome.networkError; // keep tokens; don't sign the user out
     }
   }
 }
+
+enum _RefreshOutcome { refreshed, rejected, networkError }

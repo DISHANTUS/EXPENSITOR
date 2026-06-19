@@ -94,7 +94,8 @@ def _drill_kind(t: str) -> tuple[str | None, str | None]:
 
 
 _CAPABILITY = (
-    "I can talk through your money — and show you how to use the app. Ask me things like: "
+    "I can talk through your money, show you how to use the app, and take you anywhere in it. "
+    "Ask me things like: “take me to settings”, “open my timeline”, “send feedback”, "
     "“how do I set a budget?”, “where do I add an expense?”, “show me around”, "
     "“weekly/monthly report”, “compare this month to last”, “where is my money going?”, "
     "“show red days”, “who owes me money?”, “should I lend more to Ravi?”, "
@@ -377,6 +378,10 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: C
     if _help is not None:
         return ChatTurn(type="help", message=_help.message, route=_help.route, confidence="high",
                         follow_ups=[ChatOption(label="Show me around", message="show me around")], session=ctx)
+    _nav = app_help.navigate_to(t)
+    if _nav is not None:
+        return ChatTurn(type="help", message=_nav.message, route=_nav.route, confidence="high",
+                        follow_ups=[ChatOption(label="What can you do?", message="what can you do")], session=ctx)
 
     # --- the AI itself ---
     if any(p in t for p in ("what can you do", "what do you do", "how can you help", "help me")):
@@ -541,10 +546,21 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: C
                                     ChatOption(label="This month", message="this month report")], session=new_ctx)
 
     # --- honest fallback ---
+    # A help / navigation / "how does this work" question must never be told to
+    # "add an expense first" — point the user somewhere useful instead.
+    if app_help.looks_like_help(t):
+        return _answer(
+            "I can take you around the app or show you how things work. Try “take me to settings”, "
+            "“how do I add a goal?”, “open my timeline”, or “send feedback”. I can also talk through "
+            "your money — ask “what can you do?” for the full list.",
+            ctx, confidence="high",
+            follow_ups=[ChatOption(label="What can you do?", message="what can you do"),
+                        ChatOption(label="Show me around", message="show me around")])
     days = await _data_days(db, user_id)
     if days == 0:
-        return _answer("I don’t have any activity to go on yet. Add an expense or income and ask me again.",
-                       ctx, confidence="insufficient")
+        return _answer("I don’t have any activity to go on yet. Add an expense or income and ask me again — "
+                       "or ask me “what can you do?” and I’ll show you around.", ctx, confidence="insufficient",
+                       follow_ups=[ChatOption(label="What can you do?", message="what can you do")])
     return _answer("I’m not sure how to answer that one yet. Try “weekly report”, “where is my money going?”, "
                    "“who owes me money?”, or “show red days”.", ctx,
                    follow_ups=[ChatOption(label="What can you do?", message="what can you do")])

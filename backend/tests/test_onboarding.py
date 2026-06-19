@@ -66,6 +66,11 @@ async def test_complete_tour_sets_flag(client: AsyncClient):
     ("how do i rename you", "/settings"),
     ("how do i see future me", "/future-me"),
     ("help me add an expense", "/home"),
+    ("how do i add a goal", "/future-me"),
+    ("how do i set a savings goal", "/future-me"),
+    ("how do i see my timeline", "/timeline"),
+    ("how do i see my people", "/relationships"),
+    ("how do i send feedback", "/feedback"),
 ])
 async def test_chat_how_to(client: AsyncClient, question: str, route: str):
     h = await _auth(client)
@@ -73,6 +78,44 @@ async def test_chat_how_to(client: AsyncClient, question: str, route: str):
     assert turn["type"] == "help"
     assert turn["route"] == route
     assert turn["message"]
+
+
+@pytest.mark.parametrize("question,route", [
+    ("take me to settings", "/settings"),
+    ("open my timeline", "/timeline"),
+    ("go to future me", "/future-me"),
+    ("take me to people", "/relationships"),
+    ("open feedback", "/feedback"),
+    ("go to budget", "/budget-setup"),
+    ("take me to the currency converter", "/convert"),
+    ("open the chat", "/advisor"),
+])
+async def test_chat_navigation_offers_to_open_the_screen(client: AsyncClient, question: str, route: str):
+    """\"Take me there\" requests return a help turn with the route so the client
+    can offer to open it — Advary guides instead of going silent."""
+    h = await _auth(client)
+    turn = (await client.post("/api/v1/advisor/chat", json={"message": question}, headers=h)).json()
+    assert turn["type"] == "help", question
+    assert turn["route"] == route, question
+
+
+async def test_navigation_does_not_hijack_memory_search(client: AsyncClient):
+    # "show my timeline" is a memory search, NOT a navigation request — the nav
+    # layer requires an explicit verb ("open"/"go to"/"take me") and must not steal it.
+    h = await _auth(client)
+    turn = (await client.post("/api/v1/advisor/chat", json={"message": "show my timeline"}, headers=h)).json()
+    assert turn["type"] not in ("help", "tour")
+
+
+async def test_help_question_never_told_to_add_an_expense(client: AsyncClient):
+    # A brand-new user (no activity) asking a help/navigation question must be
+    # guided, not told to "add an expense first".
+    h = await _auth(client)
+    for q in ("i can't find the settings page", "i'm lost in this app", "where is the menu"):
+        turn = (await client.post("/api/v1/advisor/chat", json={"message": q}, headers=h)).json()
+        low = (turn["message"] or "").lower()
+        assert "add an expense or income and ask me again" not in low, q
+        assert "what can you do" in low or "take you around" in low or "show you how" in low, q
 
 
 async def test_chat_show_me_around_launches_tour(client: AsyncClient):

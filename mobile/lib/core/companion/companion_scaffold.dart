@@ -131,8 +131,15 @@ class CompanionScaffold extends ConsumerWidget {
             ? OrbState.celebrating
             : (mood == CompanionMood.concerned) ? OrbState.concerned : OrbState.idle;
 
-    return AuroraBackground(
-      child: Scaffold(
+    return PopScope(
+      // Home is the root: the system back gesture exits there. Every other screen
+      // intercepts back and returns to Home instead of closing the app.
+      canPop: showGreeting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/home');
+      },
+      child: AuroraBackground(
+        child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: Text(title),
@@ -193,6 +200,7 @@ class CompanionScaffold extends ConsumerWidget {
                 child: CompanionOrb(state: orbState, size: 44),
               )
             : null,
+      ),
       ),
     );
   }
