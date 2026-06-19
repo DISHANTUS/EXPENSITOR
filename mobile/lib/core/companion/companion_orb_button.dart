@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../facts/fact_sheet.dart';
+import '../intervention/intervention_controller.dart';
+import '../intervention/intervention_sheet.dart';
 import 'companion_orb.dart';
 import 'mood_models.dart';
 
@@ -74,11 +76,109 @@ class CompanionOrbButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final top = ref.watch(topInterventionProvider);
+    final orb = CompanionOrb(state: orbState, size: size);
+    // When Advary has something to raise, the orb wears a pulsing attention ring
+    // and a tap opens the talk sheet instead of a fun fact.
     return GestureDetector(
-      onTap: () => showFactSheet(context),
+      // Opaque so the whole orb stays tappable even under the layered ring/badge.
+      behavior: HitTestBehavior.opaque,
+      onTap: top != null ? () => showInterventionSheet(context) : () => showFactSheet(context),
       onDoubleTap: () => _showEncouragement(context),
       onLongPress: () => _showFeeling(context),
-      child: CompanionOrb(state: orbState, size: size),
+      child: top == null
+          ? orb
+          : _AttentionRing(size: size, color: top.ringColor(Theme.of(context).colorScheme), child: orb),
+    );
+  }
+}
+
+/// A pulsing "I have something to say" halo around the orb — a steady breathing
+/// glow + an expanding radar ping + a small badge dot. Subtle, never a popup.
+class _AttentionRing extends StatefulWidget {
+  const _AttentionRing({required this.size, required this.color, required this.child});
+  final double size;
+  final Color color;
+  final Widget child;
+
+  @override
+  State<_AttentionRing> createState() => _AttentionRingState();
+}
+
+class _AttentionRingState extends State<_AttentionRing> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.size;
+    return SizedBox(
+      width: s,
+      height: s,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          // Expanding radar ping that fades as it grows.
+          AnimatedBuilder(
+            animation: _c,
+            builder: (_, __) {
+              final t = Curves.easeOut.transform(_c.value);
+              return Container(
+                width: s * (1 + 0.45 * t),
+                height: s * (1 + 0.45 * t),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: widget.color.withValues(alpha: (1 - t) * 0.6), width: 2),
+                ),
+              );
+            },
+          ),
+          // Steady breathing glow behind the orb.
+          AnimatedBuilder(
+            animation: _c,
+            builder: (_, child) {
+              final p = sin(_c.value * 2 * pi) * 0.5 + 0.5;
+              return Container(
+                width: s,
+                height: s,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.25 + 0.35 * p),
+                      blurRadius: 8 + 8 * p,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: child,
+              );
+            },
+            child: widget.child,
+          ),
+          // Badge dot, top-right.
+          Positioned(
+            top: -2,
+            right: -2,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
