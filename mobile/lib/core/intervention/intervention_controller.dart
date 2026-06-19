@@ -95,12 +95,66 @@ final reminderInterventionsProvider = FutureProvider.autoDispose<List<Interventi
   }
 });
 
+String _money(String amount, String currency) {
+  final n = double.tryParse(amount) ?? 0;
+  final s = n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
+  final sep = s.replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  return currency.isEmpty ? sep : '$currency $sep';
+}
+
+/// Borrowed-money trigger. Tasteful: Advary stays quiet for a far-off debt and
+/// only speaks when it's near (≤7 days) or overdue — never "Debt due" spam.
+/// (Pass 2 slice 2 adds the "Plan repayment" action backed by forecast_service.)
+final payableInterventionsProvider = FutureProvider.autoDispose<List<Intervention>>((ref) async {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  try {
+    final res = await ref.watch(dioProvider).get<dynamic>(
+          '/payables',
+          queryParameters: {'status': 'open', 'limit': 50},
+        );
+    final items = ((res.data as Map)['items'] as List?) ?? const [];
+    final out = <Intervention>[];
+    for (final raw in items.whereType<Map>()) {
+      final p = raw.cast<String, dynamic>();
+      final daysOverdue = (p['days_overdue'] as num?)?.toInt() ?? 0;
+      final dueStr = p['due_date']?.toString();
+      int? daysUntil;
+      if (dueStr != null) {
+        final d = DateTime.tryParse(dueStr);
+        if (d != null) daysUntil = DateTime(d.year, d.month, d.day).difference(today).inDays;
+      }
+      final overdue = daysOverdue > 0;
+      final soon = daysUntil != null && daysUntil >= 0 && daysUntil <= 7;
+      if (!overdue && !soon) continue; // stay quiet otherwise
+      final who = (p['source_name'] ?? 'someone').toString();
+      final amount = _money((p['converted_amount'] ?? '0').toString(), (p['base_currency'] ?? '').toString());
+      final whenWords = overdue
+          ? (daysOverdue == 1 ? 'a day overdue' : '$daysOverdue days overdue')
+          : (daysUntil == 0 ? 'due today' : daysUntil == 1 ? 'due tomorrow' : 'due in $daysUntil days');
+      out.add(Intervention(
+        id: 'payable:${p['id']}',
+        trigger: InterventionTrigger.borrowedMoney,
+        priority: overdue ? InterventionPriority.urgent : InterventionPriority.high,
+        title: '🪙 You owe $who $amount',
+        message: 'You borrowed $amount from $who — $whenWords. Worth keeping in view; I can help you plan it.',
+        payload: {'payable_id': p['id'], 'amount': p['converted_amount'], 'currency': p['base_currency'],
+                  'due_date': dueStr, 'who': who},
+      ));
+    }
+    return out;
+  } on DioException {
+    return const [];
+  }
+});
+
 /// Everything Advary currently wants to raise — manual triggers + derived
-/// reminders, minus what's been resolved, highest priority first.
+/// borrowed-money + reminders, minus what's been resolved, highest priority first.
 final pendingInterventionsProvider = Provider.autoDispose<List<Intervention>>((ref) {
   final st = ref.watch(interventionControllerProvider);
+  final payables = ref.watch(payableInterventionsProvider).valueOrNull ?? const [];
   final reminders = ref.watch(reminderInterventionsProvider).valueOrNull ?? const [];
-  final all = [...st.manual, ...reminders].where((i) => !st.resolved.contains(i.id)).toList()
+  final all = [...st.manual, ...payables, ...reminders].where((i) => !st.resolved.contains(i.id)).toList()
     ..sort((a, b) => b.priority.index.compareTo(a.priority.index));
   // de-dupe by id (a manual one wins over a derived one with the same id)
   final seen = <String>{};

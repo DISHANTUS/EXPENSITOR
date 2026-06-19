@@ -131,6 +131,29 @@ class BudgetRepository {
     });
   }
 
+  /// Money the user BORROWED (a Payable). Captures the relationship now (unused
+  /// until the relationship engine grows) so it's there later.
+  Future<void> createBorrowedMoney({
+    required String sourceName,
+    required String amount,
+    required String currency,
+    String returnExpectation = 'required',
+    DateTime? dueDate,
+    String? reason,
+    String? relationshipContext,
+  }) async {
+    await _post('/payables', {
+      'source_name': sourceName,
+      'original_amount': amount,
+      'original_currency': currency.toUpperCase(),
+      'return_expectation': returnExpectation,
+      if (dueDate != null) 'due_date': ymd(dueDate),
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      if (relationshipContext != null && relationshipContext.isNotEmpty)
+        'ai_metadata': {'relationship_context': relationshipContext},
+    });
+  }
+
   Future<BudgetSummary> summary() async {
     try {
       final res = await _dio.get<dynamic>('/budget/summary');

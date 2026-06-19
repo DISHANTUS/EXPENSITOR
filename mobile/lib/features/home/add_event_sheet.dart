@@ -23,6 +23,7 @@ const _types = <(String, String, String, String)>[
   ('💰', 'Income received', 'Salary · scholarship · gift', 'add-income'),
   ('💸', 'Log an expense', 'Something you spent', 'add-expense'),
   ('🤝', 'Lent money', 'Track who owes you back', 'add-lent'),
+  ('🪙', 'Borrowed money', "Money you owe — I'll help you repay it", 'add-borrowed'),
 ];
 
 class _AddEventSheet extends StatefulWidget {

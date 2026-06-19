@@ -17,6 +17,7 @@ import '../../features/convert/currency_center_screen.dart';
 import '../../features/date_details/date_details_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/journey/journey_screen.dart';
+import '../../features/ledger/add_borrowed_screen.dart';
 import '../../features/ledger/add_event_screen.dart';
 import '../../features/ledger/add_expense_screen.dart';
 import '../../features/ledger/add_income_screen.dart';
@@ -75,6 +76,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: 'add-income', builder: (_, state) => AddIncomeScreen(date: _parseDate(state))),
           GoRoute(path: 'add-event', builder: (_, state) => AddEventScreen(date: _parseDate(state))),
           GoRoute(path: 'add-lent', builder: (_, state) => AddLentScreen(date: _parseDate(state))),
+          GoRoute(path: 'add-borrowed', builder: (_, state) => AddBorrowedScreen(date: _parseDate(state))),
         ],
       ),
     ],

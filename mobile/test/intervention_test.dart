@@ -30,7 +30,10 @@ void main() {
 
   test('pendingInterventionsProvider sorts by priority and drops resolved', () {
     final container = ProviderContainer(
-      overrides: [reminderInterventionsProvider.overrideWith((ref) async => const [])],
+      overrides: [
+        reminderInterventionsProvider.overrideWith((ref) async => const []),
+        payableInterventionsProvider.overrideWith((ref) async => const []),
+      ],
     );
     addTearDown(container.dispose);
     container.listen(pendingInterventionsProvider, (_, __) {}); // keep alive
@@ -54,7 +57,10 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     late WidgetRef ref;
     await tester.pumpWidget(ProviderScope(
-      overrides: [reminderInterventionsProvider.overrideWith((r) async => const [])],
+      overrides: [
+        reminderInterventionsProvider.overrideWith((r) async => const []),
+        payableInterventionsProvider.overrideWith((r) async => const []),
+      ],
       child: MaterialApp(
         home: Consumer(builder: (context, r, _) {
           ref = r;
