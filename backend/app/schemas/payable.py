@@ -53,6 +53,13 @@ class PayableUpdate(BaseModel):
         return value.upper() if value is not None else value
 
 
+class RepaymentPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_date: date
+    preference: str = "auto"  # all_at_once | gradual | auto
+
+
 class PayableRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -9,8 +9,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from app.api.deps import CurrentUser, DbSession
 from app.models.enums import PayableStatus
 from app.schemas.common import Page
-from app.schemas.payable import PayableCreate, PayableRead, PayableUpdate
-from app.services import payable_service
+from app.schemas.payable import PayableCreate, PayableRead, PayableUpdate, RepaymentPlanRequest
+from app.services import payable_service, repayment_service
 from app.services.exceptions import (
     CurrencyNotFoundError,
     InvalidOperationError,
@@ -73,6 +73,18 @@ async def update_payable(
         raise _NOT_FOUND from exc
     except (CurrencyNotFoundError, RateNotAvailableError, InvalidOperationError) as exc:
         raise _to_422(exc) from exc
+
+
+@router.post("/{payable_id}/repayment-plan", summary="Advary's repayment plan for a borrowed debt")
+async def repayment_plan(
+    payable_id: uuid.UUID, data: RepaymentPlanRequest, current_user: CurrentUser, db: DbSession
+) -> dict:
+    try:
+        return await repayment_service.plan(
+            db, current_user.id, payable_id, target_date=data.target_date, preference=data.preference
+        )
+    except ResourceNotFoundError as exc:
+        raise _NOT_FOUND from exc
 
 
 @router.delete("/{payable_id}", status_code=status.HTTP_204_NO_CONTENT)

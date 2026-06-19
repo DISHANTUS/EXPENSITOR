@@ -67,6 +67,31 @@ async def test_payables_are_separate_from_receivables(client: AsyncClient) -> No
     assert payables["total"] == 1
 
 
+async def test_repayment_plan_reuses_affordability(client: AsyncClient) -> None:
+    h = await _auth(client, "payable_plan@example.com")
+    await client.post("/api/v1/income-sources", json={
+        "label": "Salary", "source_type": "salary", "kind": "recurring",
+        "original_amount": "50000", "original_currency": "INR", "recurrence_day": 1}, headers=h)
+    pid = (await client.post("/api/v1/payables", json={
+        "source_name": "Kaguya", "original_amount": "5000", "original_currency": "INR"}, headers=h)).json()["id"]
+
+    r = await client.post(f"/api/v1/payables/{pid}/repayment-plan",
+                          json={"target_date": "2026-12-15", "preference": "gradual"}, headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["who"] == "Kaguya"
+    assert isinstance(body["feasible"], bool)
+    assert body["verdict"] in ("affordable", "conditional", "unaffordable")
+    assert body["monthly_pace"] and isinstance(body["impact"], list) and body["impact"]
+
+
+async def test_repayment_plan_404_for_unknown_payable(client: AsyncClient) -> None:
+    h = await _auth(client, "payable_plan2@example.com")
+    r = await client.post("/api/v1/payables/00000000-0000-0000-0000-000000000000/repayment-plan",
+                          json={"target_date": "2026-12-15"}, headers=h)
+    assert r.status_code == 404
+
+
 async def test_amount_must_be_positive(client: AsyncClient) -> None:
     h = await _auth(client, "payable6@example.com")
     r = await client.post("/api/v1/payables", json={
