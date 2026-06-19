@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.intelligence.advisor import phrasing as ph
 from app.intelligence.projection import affordability
-from app.services import payable_service, projection_service
+from app.services import advice_memory_service, payable_service, projection_service
 
 _ZERO = Decimal("0")
 
@@ -107,3 +107,37 @@ async def plan(
         "impact": impact,
         "alternatives": alternatives,
     }
+
+
+async def commit(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    payable_id: uuid.UUID,
+    *,
+    target_date: date,
+    preference: str = "auto",
+) -> dict:
+    """The user accepted a plan → remember it as a generic commitment Fact via the
+    existing advice_memory follow-up engine (so Advary later asks "did that
+    happen?") and as a timeline entry. Same mechanism debt / goals / income
+    verification will all reuse."""
+    payable = await payable_service.get(db, user_id, payable_id)  # raises if not found
+    cur = payable.base_currency
+    cost = Decimal(payable.converted_amount)
+    who = payable.source_name
+    claim = f"repay {who} {ph.money(cost, cur)} by {target_date:%d %b %Y}"
+    fact = {
+        "type": "repayment_commitment",
+        "person": who,
+        "amount": str(cost),
+        "target_date": target_date.isoformat(),
+        "source": "borrowed_money_intervention",
+        "preference": preference,
+        "commitment_status": "active",  # active | completed | missed | cancelled (for later)
+    }
+    await advice_memory_service.record_advice(
+        db, user_id, kind="commitment", subject_type="payable", subject_id=payable_id,
+        subject_label=who, claim=claim, expected_value=cost, expected_date=target_date,
+        assumptions=fact, base_currency=cur,
+    )
+    return {"committed": True, "claim": claim, "fact": fact}

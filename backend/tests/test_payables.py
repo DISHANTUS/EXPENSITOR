@@ -92,6 +92,25 @@ async def test_repayment_plan_404_for_unknown_payable(client: AsyncClient) -> No
     assert r.status_code == 404
 
 
+async def test_accept_plan_records_commitment_and_shows_in_timeline(client: AsyncClient) -> None:
+    h = await _auth(client, "payable_commit@example.com")
+    pid = (await client.post("/api/v1/payables", json={
+        "source_name": "Kaguya", "original_amount": "5000", "original_currency": "INR"}, headers=h)).json()["id"]
+
+    r = await client.post(f"/api/v1/payables/{pid}/commit-repayment",
+                          json={"target_date": "2026-08-15", "preference": "gradual"}, headers=h)
+    assert r.status_code == 200, r.text
+    fact = r.json()["fact"]
+    assert fact["type"] == "repayment_commitment"
+    assert fact["person"] == "Kaguya"
+    assert fact["commitment_status"] == "active"
+
+    # the commitment becomes a timeline entry (the follow-up engine remembers it)
+    tl = await client.get("/api/v1/timeline", headers=h)
+    assert tl.status_code == 200, tl.text
+    assert "Kaguya" in tl.text and "Committed to repay" in tl.text
+
+
 async def test_amount_must_be_positive(client: AsyncClient) -> None:
     h = await _auth(client, "payable6@example.com")
     r = await client.post("/api/v1/payables", json={

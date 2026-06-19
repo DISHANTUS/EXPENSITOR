@@ -98,6 +98,16 @@ class PayableRepository {
       throw mapDioError(e);
     }
   }
+
+  /// Accept a plan → records a repayment commitment (Advary follows up later).
+  Future<void> commitRepayment(String id, {required DateTime targetDate, required String preference}) async {
+    try {
+      await _dio.post<dynamic>('/payables/$id/commit-repayment',
+          data: {'target_date': ymd(targetDate), 'preference': preference});
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
 }
 
 final payableRepositoryProvider = Provider<PayableRepository>((ref) => PayableRepository(ref.watch(dioProvider)));

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.intelligence.learning import success as S
 from app.intelligence.timeline import builder as B, chapters, query
 from app.models import (
+    AdviceMemory,
     CompanionEvent,
     Income,
     LifeEvent,
@@ -29,6 +30,7 @@ from app.models import (
     SavingsGoal,
 )
 from app.models.enums import (
+    AdviceStatus,
     CompanionEventType,
     PlannedExpenseStatus,
     ReceivableKind,
@@ -127,6 +129,23 @@ async def gather(db: AsyncSession, user_id: uuid.UUID, *, today: date) -> list[B
     for ls in lessons:
         entries.append(B.Entry(date=ls.first_observed, title=f"Learned: {ls.lesson}", kind="lesson",
                                importance="medium", when=_when(ls.first_observed, today), icon="💡"))
+
+    # --- repayment commitments (the advice_memory follow-up engine): "you
+    # committed to repay X by …", and "you repaid X" once it's answered yes ---
+    commitments = (await db.execute(select(AdviceMemory).where(
+        AdviceMemory.user_id == user_id, AdviceMemory.deleted_at.is_(None),
+        AdviceMemory.kind == "commitment"))).scalars().all()
+    for cm in commitments:
+        who = cm.subject_label or "someone"
+        if cm.status == AdviceStatus.answered.value and (cm.answer or "").lower() in ("yes", "partial"):
+            on = cm.updated_at.date() if cm.updated_at else None
+            entries.append(B.Entry(date=on, title=f"Repaid {who}", kind="achievement", importance="high",
+                                   when=_when(on, today), icon="🎉", person=who))
+        else:
+            on = cm.created_at.date() if cm.created_at else None
+            by = f" by {cm.expected_date.isoformat()}" if cm.expected_date else ""
+            entries.append(B.Entry(date=on, title=f"Committed to repay {who}{by}", kind="commitment",
+                                   importance="medium", when=_when(on, today), icon="🪙", person=who))
 
     # --- explicitly recorded timeline candidates (5a.5 achievements; deduped in the builder) ---
     rows = (await db.execute(select(CompanionEvent).where(

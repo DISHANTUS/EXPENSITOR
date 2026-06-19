@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/companion/companion_orb.dart';
 import '../../core/format/dates.dart';
+import '../../core/intervention/intervention_controller.dart';
 import '../../core/theme/glass.dart';
 import 'payable_repository.dart';
 
@@ -24,7 +25,31 @@ class _RepaymentPlanScreenState extends ConsumerState<RepaymentPlanScreen> {
   String _preference = 'auto';
   RepaymentPlan? _plan;
   bool _busy = false;
+  bool _accepting = false;
   String? _error;
+
+  Future<void> _accept() async {
+    if (_date == null) return;
+    setState(() => _accepting = true);
+    try {
+      await ref.read(payableRepositoryProvider)
+          .commitRepayment(widget.payableId, targetDate: _date!, preference: _preference);
+      // The orb can stop raising this debt now — it's a remembered commitment.
+      ref.read(interventionControllerProvider.notifier).resolve('payable:${widget.payableId}');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Saved — I'll check in with you about it.")));
+      context.go('/home');
+    } on AppError catch (e) {
+      if (!mounted) return;
+      setState(() => _accepting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _accepting = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save. Please try again.')));
+    }
+  }
 
   static const _prefs = <({String value, String label})>[
     (value: 'all_at_once', label: 'All at once'),
@@ -135,7 +160,12 @@ class _RepaymentPlanScreenState extends ConsumerState<RepaymentPlanScreen> {
               ],
               if (_plan != null) ...[
                 const SizedBox(height: 20),
-                _PlanCard(plan: _plan!, onPickAlt: (d) => setState(() { _date = d; _plan = null; })),
+                _PlanCard(
+                  plan: _plan!,
+                  accepting: _accepting,
+                  onAccept: _accept,
+                  onPickAlt: (d) => setState(() { _date = d; _plan = null; }),
+                ),
               ],
             ],
           );
@@ -149,9 +179,11 @@ class _RepaymentPlanScreenState extends ConsumerState<RepaymentPlanScreen> {
 }
 
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.plan, required this.onPickAlt});
+  const _PlanCard({required this.plan, required this.onPickAlt, required this.onAccept, required this.accepting});
   final RepaymentPlan plan;
   final void Function(DateTime) onPickAlt;
+  final VoidCallback onAccept;
+  final bool accepting;
 
   @override
   Widget build(BuildContext context) {
@@ -194,8 +226,10 @@ class _PlanCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.tonal(
-              onPressed: () => context.go('/home'),
-              child: const Text('Sounds good'),
+              onPressed: accepting ? null : onAccept,
+              child: accepting
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Sounds good'),
             ),
           ),
         ],

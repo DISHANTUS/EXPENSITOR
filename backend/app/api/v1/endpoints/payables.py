@@ -87,6 +87,18 @@ async def repayment_plan(
         raise _NOT_FOUND from exc
 
 
+@router.post("/{payable_id}/commit-repayment", summary="Accept a repayment plan (records a commitment)")
+async def commit_repayment(
+    payable_id: uuid.UUID, data: RepaymentPlanRequest, current_user: CurrentUser, db: DbSession
+) -> dict:
+    try:
+        return await repayment_service.commit(
+            db, current_user.id, payable_id, target_date=data.target_date, preference=data.preference
+        )
+    except ResourceNotFoundError as exc:
+        raise _NOT_FOUND from exc
+
+
 @router.delete("/{payable_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_payable(payable_id: uuid.UUID, current_user: CurrentUser, db: DbSession) -> Response:
     try:

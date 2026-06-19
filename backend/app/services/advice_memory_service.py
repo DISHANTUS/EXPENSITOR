@@ -43,6 +43,7 @@ _FOLLOWUP_TEMPLATES = {
     "recommendation": "A while back I suggested {claim}. Did you manage it?",
     "relationship": "Last time we talked about {subject}'s repayment. What happened?",
     "budget": "How did your budget for {subject} go?",
+    "commitment": "You planned to repay {subject}. Did that happen?",
 }
 _OPTIONS = [("Yes", "yes"), ("Partially", "partial"), ("No", "no")]
 
