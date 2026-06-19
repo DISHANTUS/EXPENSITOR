@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     incomes,
     life_events,
     outcomes,
+    payables,
     persons,
     planned_expenses,
     preferences,
@@ -62,6 +63,7 @@ api_router.include_router(expenses.router)
 api_router.include_router(planned_expenses.router)
 api_router.include_router(companion.router)
 api_router.include_router(receivables.router)
+api_router.include_router(payables.router)
 api_router.include_router(budget_sessions.router)
 api_router.include_router(advisor.router)
 api_router.include_router(advisor_chat.router)

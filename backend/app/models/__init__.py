@@ -20,6 +20,7 @@ from app.models.income_source import IncomeSource
 from app.models.life_event import LifeEvent
 from app.models.life_lesson import LifeLesson
 from app.models.outcome import Outcome
+from app.models.payable import Payable
 from app.models.person import Person
 from app.models.planned_expense import PlannedExpense
 from app.models.receivable import Receivable
@@ -49,6 +50,7 @@ __all__ = [
     "LifeEvent",
     "LifeLesson",
     "Outcome",
+    "Payable",
     "Person",
     "PlannedExpense",
     "Receivable",
