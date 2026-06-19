@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/analytics/analytics.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/companion/companion_orb.dart';
 import '../../core/format/dates.dart';
@@ -34,6 +35,7 @@ class _RepaymentPlanScreenState extends ConsumerState<RepaymentPlanScreen> {
     try {
       await ref.read(payableRepositoryProvider)
           .commitRepayment(widget.payableId, targetDate: _date!, preference: _preference);
+      ref.read(analyticsProvider).track('plan_accepted', {'preference': _preference});
       // The orb can stop raising this debt now — it's a remembered commitment.
       ref.read(interventionControllerProvider.notifier).resolve('payable:${widget.payableId}');
       if (!mounted) return;

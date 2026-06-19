@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../analytics/analytics.dart';
 import '../facts/fact_sheet.dart';
 import '../intervention/intervention_controller.dart';
 import '../intervention/intervention_sheet.dart';
@@ -83,7 +84,12 @@ class CompanionOrbButton extends ConsumerWidget {
     return GestureDetector(
       // Opaque so the whole orb stays tappable even under the layered ring/badge.
       behavior: HitTestBehavior.opaque,
-      onTap: top != null ? () => showInterventionSheet(context) : () => showFactSheet(context),
+      onTap: top != null
+          ? () {
+              ref.read(analyticsProvider).track('intervention_opened', {'trigger': top.trigger.name});
+              showInterventionSheet(context);
+            }
+          : () => showFactSheet(context),
       onDoubleTap: () => _showEncouragement(context),
       onLongPress: () => _showFeeling(context),
       child: top == null

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../analytics/analytics.dart';
 import '../companion/companion_orb.dart';
 import '../theme/glass.dart';
 import 'intervention.dart';
@@ -91,7 +92,11 @@ class _InterventionSheetState extends ConsumerState<_InterventionSheet> {
                         ),
                         const SizedBox(width: 10),
                         TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () {
+                            ref.read(analyticsProvider).track('intervention_dismissed',
+                                {'trigger': top.trigger.name, 'stage': 'opener'});
+                            Navigator.of(context).pop();
+                          },
                           child: const Text('Later'),
                         ),
                       ]),
@@ -125,7 +130,11 @@ class _InterventionSheetState extends ConsumerState<_InterventionSheet> {
                             ),
                           if (top.actionLabel != null) const SizedBox(width: 10),
                           TextButton(
-                            onPressed: () => _resolveAndClose(top),
+                            onPressed: () {
+                              ref.read(analyticsProvider).track('intervention_dismissed',
+                                  {'trigger': top.trigger.name, 'stage': 'message'});
+                              _resolveAndClose(top);
+                            },
                             child: const Text('Got it'),
                           ),
                         ]),

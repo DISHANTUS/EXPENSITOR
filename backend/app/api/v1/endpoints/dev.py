@@ -1,14 +1,65 @@
-"""Developer-only tools (gated by is_developer / allow-list)."""
+"""Developer-only tools (gated by is_developer / allow-list).
+
+Also hosts a deliberately tiny analytics pipe: clients fire lightweight events
+(`POST /dev/track`, any user) recorded as CompanionEvents, and the developer
+reads aggregate counts (`GET /dev/stats`). Friends-beta numbers > opinions; no
+new table.
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+from typing import Any
 
-from app.api.deps import DbSession, RequireDeveloper
+from fastapi import APIRouter, Response, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
+
+from app.api.deps import CurrentUser, DbSession, RequireDeveloper
+from app.models import AdviceMemory, CompanionEvent
+from app.models.enums import AdviceStatus, CompanionEventType
 from app.services import backup_service, reset_service
 
 router = APIRouter(prefix="/dev", tags=["dev"])
+
+
+class TrackIn(BaseModel):
+    event: str
+    props: dict[str, Any] | None = None
+
+
+@router.post("/track", status_code=status.HTTP_204_NO_CONTENT,
+             summary="Record a tiny client analytics event (any user)")
+async def track(data: TrackIn, current_user: CurrentUser, db: DbSession) -> Response:
+    db.add(CompanionEvent(
+        user_id=current_user.id, event_type=CompanionEventType.system,
+        surface="analytics", action=data.event[:60], payload=data.props or {}))
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/stats", summary="Aggregate beta-usage counts (developer-only)")
+async def stats(current_user: RequireDeveloper, db: DbSession) -> dict[str, Any]:
+    rows = (await db.execute(
+        select(CompanionEvent.action, func.count())
+        .where(CompanionEvent.surface == "analytics")
+        .group_by(CompanionEvent.action))).all()
+    events = {a: int(c) for a, c in rows}
+    commitments = await db.scalar(select(func.count()).select_from(AdviceMemory).where(
+        AdviceMemory.kind == "commitment", AdviceMemory.deleted_at.is_(None))) or 0
+    answered = await db.scalar(select(func.count()).select_from(AdviceMemory).where(
+        AdviceMemory.kind == "commitment", AdviceMemory.status == AdviceStatus.answered.value)) or 0
+    shown = events.get("intervention_shown", 0)
+    opened = events.get("intervention_opened", 0)
+    return {
+        "intervention_shown": shown,
+        "intervention_opened": opened,
+        "intervention_dismissed": events.get("intervention_dismissed", 0),
+        "open_rate": round(opened / shown, 2) if shown else None,  # the annoyance signal
+        "plan_accepted": events.get("plan_accepted", 0),
+        "commitments_recorded": int(commitments),
+        "follow_ups_answered": int(answered),
+        "all_events": events,
+    }
 
 
 class CalendarPreviewOut(BaseModel):

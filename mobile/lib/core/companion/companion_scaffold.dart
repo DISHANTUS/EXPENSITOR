@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../analytics/analytics.dart';
+import '../intervention/intervention_controller.dart';
 import '../nav/app_drawer.dart';
 import '../settings/settings_repository.dart';
 import '../theme/aurora_background.dart';
@@ -99,6 +101,12 @@ class CompanionScaffold extends ConsumerWidget {
         _handleReaction(ref, next.first,
             speakCelebrations: prefs['speak_celebrations'] ?? true,
             tappedOnly: prefs['voice_when_tapped_only'] ?? false);
+      }
+    });
+    // Tiny analytics: count each intervention the orb raises, once per session.
+    ref.listen(topInterventionProvider, (_, next) {
+      if (next != null && shownInterventions.add(next.id)) {
+        ref.read(analyticsProvider).track('intervention_shown', {'trigger': next.trigger.name});
       }
     });
 
