@@ -83,7 +83,9 @@ async def test_month_grid_has_income_and_event_markers(client: AsyncClient) -> N
     month = (await client.get(f"/api/v1/calendar/month?year={today.year}&month={today.month}", headers=h)).json()
     cell = next(c for c in month["days"] if c["date"] == today.isoformat())
     assert "income" in cell["markers"]
-    assert "event" in cell["markers"]
+    # A planner event renders its OWN marker (outing → ❤️), not a generic 📅.
+    assert "outing" in cell["markers"]
+    assert "event" not in cell["markers"]
     assert cell["event_count"] == 1
 
 

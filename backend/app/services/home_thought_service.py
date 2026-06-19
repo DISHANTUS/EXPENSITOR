@@ -17,7 +17,6 @@ from app.models import Receivable, SavingsGoal
 from app.models.enums import ReceivableKind, ReceivableStatus, SavingsGoalKind, SavingsGoalStatus
 from app.services import (
     calendar_service,
-    facts_service,
     feasibility_service,
     forecast_service,
     profile_service,
@@ -123,10 +122,7 @@ async def build(db: AsyncSession, user_id: uuid.UUID) -> dict:
         when = f" in {profile.future_move_year}" if profile.future_move_year else ""
         lines.append(f"Next up: moving to {where}{when}.")
 
-    # Last resort — nothing user-specific to say. A fun fact is friendlier than a
-    # filler line, but it only ever appears here, after everything about the user.
-    if not lines:
-        fact = facts_service.fallback_thought(today)
-        lines.append(fact or "Nothing pressing today — a good day to get a little ahead.")
-
+    # Nothing user-specific to say → stay quiet (empty lines). The Home screen
+    # then surfaces the "Did You Know" fact card instead, so a fact only ever
+    # appears in ONE place and never duplicates the orb's own thought.
     return {"lines": lines, "mood": mood}

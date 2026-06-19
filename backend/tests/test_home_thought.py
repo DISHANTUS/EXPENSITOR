@@ -19,11 +19,9 @@ async def _auth(client: AsyncClient, email: str = "thought@example.com") -> dict
 async def test_default_thought_when_empty(client: AsyncClient):
     h = await _auth(client)
     t = (await client.get("/api/v1/companion/home-thought", headers=h)).json()
-    # With nothing user-specific, Advary falls back to a fun fact (last resort) —
-    # or the warm default if no fact packs are present.
-    assert t["lines"]
-    first = t["lines"][0]
-    assert first.startswith("Did you know?") or "Nothing pressing" in first
+    # With nothing user-specific, the orb stays quiet (no lines) — the Home screen
+    # shows the "Did You Know" fact card instead, so a fact lives in only one place.
+    assert t["lines"] == []
     assert t["mood"] == "idle"
 
 

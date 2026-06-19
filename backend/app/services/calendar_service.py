@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DailyPlan, Expense, Income, PlannedExpense, Receivable, RecurringRule, UserSettings
-from app.models.enums import PlannedExpenseStatus, ReceivableKind, ReceivableStatus
+from app.models.enums import OccasionType, PlannedExpenseStatus, ReceivableKind, ReceivableStatus
 from app.schemas.calendar import DayCell, DayDetail, MonthView
 from app.schemas.expense import ExpenseRead
 from app.schemas.income import IncomeRead
@@ -57,7 +57,28 @@ def classify(spent: Decimal, budget: Decimal | None, day: date, today: date) -> 
     return "within"  # spent == budget
 
 
-def markers_for(classification: str, income: Decimal, event_count: int) -> list[str]:
+# A planner event renders its OWN emoji on the calendar (🎂 birthday, ✈️ trip,
+# ❤️ outing …) — never a generic 📅. A plain planned expense with no occasion
+# still falls back to the generic event marker.
+_OCCASION_MARKER: dict[OccasionType, str] = {
+    OccasionType.outing: "outing",
+    OccasionType.shopping: "expense_shopping",
+    OccasionType.entertainment: "expense_entertainment",
+    OccasionType.travel: "trip",
+    OccasionType.date: "outing",
+    OccasionType.birthday: "birthday",
+    OccasionType.festival: "festival",
+    OccasionType.vacation: "trip",
+    OccasionType.celebration: "celebration",
+    OccasionType.custom: "event",
+}
+
+
+def _event_marker(occasion: OccasionType | None) -> str:
+    return _OCCASION_MARKER.get(occasion, "event") if occasion is not None else "event"
+
+
+def markers_for(classification: str, income: Decimal, event_markers: list[str]) -> list[str]:
     markers: list[str] = []
     if classification == "over":
         markers.append("budget_over")
@@ -67,8 +88,9 @@ def markers_for(classification: str, income: Decimal, event_count: int) -> list[
         markers.append("budget_within")
     if income > _ZERO:
         markers.append("income")
-    if event_count > 0:
-        markers.append("event")
+    for key in event_markers:
+        if key not in markers:
+            markers.append(key)
     return markers
 
 
@@ -158,17 +180,22 @@ async def month_view(db: AsyncSession, user_id: uuid.UUID, year: int, month: int
     income_by = await _sum_by_day(db, Income, Income.received_date, Income.converted_amount, user_id, start, end)
 
     ev_result = await db.execute(
-        select(PlannedExpense.planned_date, func.count())
-        .where(
+        select(PlannedExpense.planned_date, PlannedExpense.occasion_type).where(
             PlannedExpense.user_id == user_id,
             PlannedExpense.deleted_at.is_(None),
             PlannedExpense.status != PlannedExpenseStatus.cancelled,
             PlannedExpense.planned_date >= start,
             PlannedExpense.planned_date <= end,
         )
-        .group_by(PlannedExpense.planned_date)
     )
-    events_by = {row[0]: int(row[1]) for row in ev_result.all()}
+    events_by: dict[date, int] = {}
+    event_markers_by: dict[date, list[str]] = {}
+    for planned_date, occ in ev_result.all():
+        events_by[planned_date] = events_by.get(planned_date, 0) + 1
+        bucket = event_markers_by.setdefault(planned_date, [])
+        key = _event_marker(occ)
+        if key not in bucket:
+            bucket.append(key)
 
     plan_result = await db.execute(
         select(DailyPlan.plan_date, DailyPlan.planned_budget).where(
@@ -195,7 +222,7 @@ async def month_view(db: AsyncSession, user_id: uuid.UUID, year: int, month: int
                 planned_budget=planned_budget,
                 effective_budget=effective,
                 classification=cls,
-                markers=markers_for(cls, income, event_count) + extra.get(d, []),
+                markers=markers_for(cls, income, event_markers_by.get(d, [])) + extra.get(d, []),
             )
         )
 
@@ -246,6 +273,12 @@ async def day_detail(db: AsyncSession, user_id: uuid.UUID, day: date, *, today: 
     cls = classify(spent, effective, day, today)
     extra = await _extra_markers(db, user_id, day, day, today)
 
+    event_markers: list[str] = []
+    for e in ev_rows:
+        key = _event_marker(e.occasion_type)
+        if key not in event_markers:
+            event_markers.append(key)
+
     return DayDetail(
         date=day,
         base_currency=settings.base_currency,
@@ -255,7 +288,7 @@ async def day_detail(db: AsyncSession, user_id: uuid.UUID, day: date, *, today: 
         income=income,
         remaining=remaining,
         classification=cls,
-        markers=markers_for(cls, income, len(ev_rows)) + extra.get(day, []),
+        markers=markers_for(cls, income, event_markers) + extra.get(day, []),
         overspend_reason=plan.overspend_reason if plan else None,
         expenses=[ExpenseRead.model_validate(e) for e in exp_rows],
         incomes=[IncomeRead.model_validate(i) for i in inc_rows],
