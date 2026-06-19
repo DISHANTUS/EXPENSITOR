@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../analytics/analytics.dart';
+import '../api/api_client.dart';
 import '../companion/companion_orb.dart';
 import '../theme/glass.dart';
 import 'intervention.dart';
@@ -28,11 +29,45 @@ class _InterventionSheet extends ConsumerStatefulWidget {
 
 class _InterventionSheetState extends ConsumerState<_InterventionSheet> {
   bool _talking = false;
+  bool _submittingText = false;
+  final _text = TextEditingController();
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
 
   void _resolveAndClose(Intervention i, {Fact? fact, String? route}) {
     ref.read(interventionControllerProvider.notifier).resolve(i.id, fact: fact);
     Navigator.of(context).pop();
     if (route != null) context.go(route);
+  }
+
+  /// Free-text answer (e.g. a name). For the relationship-learning trigger it
+  /// creates a real Person — Advary learns it instead of assuming.
+  Future<void> _submitText(Intervention top) async {
+    final value = _text.text.trim();
+    if (value.isEmpty) {
+      _resolveAndClose(top); // "skip" — never forced
+      return;
+    }
+    setState(() => _submittingText = true);
+    if (top.trigger == InterventionTrigger.relationshipLearning) {
+      final occ = (top.payload['occasion'] ?? '').toString();
+      final relType = occ == 'date' ? 'partner' : 'friend';
+      try {
+        await ref.read(dioProvider).post<dynamic>('/persons',
+            data: {'name': value, 'relationship_type': relType});
+      } catch (_) {
+        // best-effort; never block the user
+      }
+    }
+    ref.read(analyticsProvider).track('intervention_answered', {'trigger': top.trigger.name});
+    ref.read(interventionControllerProvider.notifier)
+        .resolve(top.id, fact: Fact(type: 'relationship_name', person: value));
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -103,7 +138,35 @@ class _InterventionSheetState extends ConsumerState<_InterventionSheet> {
                     ] else ...[
                       Text(top.message, style: tt.bodyMedium?.copyWith(height: 1.4)),
                       const SizedBox(height: 16),
-                      if (top.question != null && top.choices.isNotEmpty) ...[
+                      if (top.inputLabel != null) ...[
+                        TextField(
+                          controller: _text,
+                          autofocus: true,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(labelText: top.inputLabel),
+                          onSubmitted: (_) => _submitText(top),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: _submittingText ? null : () => _submitText(top),
+                              child: _submittingText
+                                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Text('Save'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          TextButton(
+                            onPressed: () {
+                              ref.read(analyticsProvider)
+                                  .track('intervention_dismissed', {'trigger': top.trigger.name, 'stage': 'input'});
+                              _resolveAndClose(top);
+                            },
+                            child: const Text('Not now'),
+                          ),
+                        ]),
+                      ] else if (top.question != null && top.choices.isNotEmpty) ...[
                         Text(top.question!, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                         const SizedBox(height: 8),
                         for (final c in top.choices)

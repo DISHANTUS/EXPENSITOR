@@ -14,6 +14,7 @@ enum InterventionTrigger {
   spendingPatternChange,
   subscriptionDue,
   reminder,
+  relationshipLearning,
   generic,
 }
 
@@ -57,6 +58,7 @@ class Intervention {
     this.choices = const [],
     this.actionLabel,
     this.actionRoute,
+    this.inputLabel,
     this.payload = const {},
   });
 
@@ -69,6 +71,7 @@ class Intervention {
   final List<InterventionChoice> choices; // answer options (each may mint a Fact)
   final String? actionLabel; // primary CTA when there are no choices
   final String? actionRoute; // optional navigation when the action is taken
+  final String? inputLabel; // when set, Advary asks for a free-text answer (e.g. a name)
   final Map<String, dynamic> payload; // trigger-specific data
 
   Color ringColor(ColorScheme cs) => switch (priority) {

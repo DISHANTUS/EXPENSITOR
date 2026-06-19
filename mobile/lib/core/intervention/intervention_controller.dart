@@ -150,13 +150,53 @@ final payableInterventionsProvider = FutureProvider.autoDispose<List<Interventio
   }
 });
 
+bool _titleNamesPerson(String title) {
+  // "Dinner with Kaguya" / "Kaguya's birthday" already names a person; "Outing"
+  // or "Date night" does not — so Advary asks instead of assuming.
+  return RegExp(r'\bwith\s+[A-Z][a-zA-Z]+').hasMatch(title) ||
+      RegExp(r"[A-Z][a-zA-Z]+['’]s\b").hasMatch(title);
+}
+
+/// "Ask, don't assume": when the user plans an outing/date with no named person,
+/// Advary gently asks who it's with (consent-based, optional) — one at a time so
+/// it never nags. The answer creates a real Person (relationship), not a guess.
+final relationshipInterventionsProvider = FutureProvider.autoDispose<List<Intervention>>((ref) async {
+  try {
+    final res = await ref.watch(dioProvider).get<dynamic>('/planned-expenses', queryParameters: {'limit': 50});
+    final items = ((res.data as Map)['items'] as List?) ?? const [];
+    for (final raw in items.whereType<Map>()) {
+      final e = raw.cast<String, dynamic>();
+      final occ = e['occasion_type']?.toString();
+      if (occ != 'outing' && occ != 'date') continue;
+      final title = (e['title'] ?? '').toString();
+      if (title.isEmpty || _titleNamesPerson(title)) continue;
+      return [Intervention(
+        id: 'rel-name:${e['id']}',
+        trigger: InterventionTrigger.relationshipLearning,
+        priority: InterventionPriority.low,
+        title: '💛 Getting to know you',
+        message: 'I noticed you planned "$title". Mind if I ask who it\'s with? '
+            "It helps me understand your world — totally optional.",
+        inputLabel: 'Their name',
+        payload: {'event_id': e['id'], 'occasion': occ, 'title': title},
+      )];
+    }
+    return const [];
+  } on DioException {
+    return const [];
+  }
+});
+
 /// Everything Advary currently wants to raise — manual triggers + derived
-/// borrowed-money + reminders, minus what's been resolved, highest priority first.
+/// borrowed-money + reminders + relationship questions, minus what's been
+/// resolved, highest priority first.
 final pendingInterventionsProvider = Provider.autoDispose<List<Intervention>>((ref) {
   final st = ref.watch(interventionControllerProvider);
   final payables = ref.watch(payableInterventionsProvider).valueOrNull ?? const [];
   final reminders = ref.watch(reminderInterventionsProvider).valueOrNull ?? const [];
-  final all = [...st.manual, ...payables, ...reminders].where((i) => !st.resolved.contains(i.id)).toList()
+  final relationship = ref.watch(relationshipInterventionsProvider).valueOrNull ?? const [];
+  final all = [...st.manual, ...payables, ...reminders, ...relationship]
+      .where((i) => !st.resolved.contains(i.id)).toList()
     ..sort((a, b) => b.priority.index.compareTo(a.priority.index));
   // de-dupe by id (a manual one wins over a derived one with the same id)
   final seen = <String>{};
