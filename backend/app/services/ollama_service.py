@@ -97,10 +97,29 @@ def _make_generate(*, temperature: float, seed: int):
 
 async def complete(messages: list[dict[str, str]]) -> str:
     """One-shot, low-temperature completion for structured/routing use (NOT
-    narration). Strips any <think> block a thinking model emits. Raises on
-    disabled-by-config / timeout / HTTP error — the caller decides the fallback.
-    The chat router gates on settings.OLLAMA_ENABLED before calling this."""
-    return await _make_generate(temperature=0.0, seed=7)(messages)
+    narration). Disables a thinking model's reasoning for speed (≈2.5s vs ≈5s on
+    qwen3:8b) and strips any leftover <think> block. Raises on disabled / timeout /
+    HTTP error — the caller decides the fallback. The chat router gates on
+    settings.OLLAMA_ENABLED before calling this."""
+    client = _get_client()
+
+    async def _post(think: bool | None) -> str:
+        body: dict[str, Any] = {"model": settings.OLLAMA_MODEL, "messages": messages,
+                                "stream": False, "options": {"temperature": 0.0, "seed": 7}}
+        if think is not None:
+            body["think"] = think
+        resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/chat", json=body)
+        resp.raise_for_status()
+        content = resp.json().get("message", {}).get("content", "")
+        return _THINK_RE.sub("", content).strip()
+
+    async def _call() -> str:
+        try:
+            return await _post(False)          # fast path: reasoning off
+        except httpx.HTTPStatusError:
+            return await _post(None)            # a model/version that rejects "think" → plain call
+
+    return await asyncio.wait_for(_call(), timeout=settings.OLLAMA_TIMEOUT_SECONDS)
 
 
 def _too_similar(text: str, recents: list[str]) -> bool:
