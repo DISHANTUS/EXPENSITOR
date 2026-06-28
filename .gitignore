@@ -39,3 +39,6 @@ backend/backups/
 
 # Built APKs (large binaries / build artifacts)
 *.apk
+
+# LLM bridge tunnel binary (downloaded at runtime)
+scripts/cloudflared.exe
