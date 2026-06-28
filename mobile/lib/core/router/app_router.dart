@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_state.dart';
+import '../voice/conversation_controller.dart';
 import '../voice/voice_service.dart';
 import '../../features/advisor/chat_screen.dart';
 import '../../features/appearance/appearance_screen.dart';
@@ -95,9 +96,15 @@ class _VoiceStopObserver extends NavigatorObserver {
   final Ref _ref;
 
   void _stop() {
+    // Release BOTH the speaker (TTS) and the mic (STT) on navigation. A live mic
+    // session leaves Android in "communication mode", which silences the user's
+    // ringtones and notification sounds until the session is closed.
     try {
       _ref.read(voiceControllerProvider.notifier).stop();
     } catch (_) {/* voice not initialised yet */}
+    try {
+      _ref.read(conversationControllerProvider.notifier).stop();
+    } catch (_) {/* conversation not initialised yet */}
   }
 
   @override

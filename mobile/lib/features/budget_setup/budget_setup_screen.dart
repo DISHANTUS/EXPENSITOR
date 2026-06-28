@@ -165,10 +165,12 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         return _amount('Transport per month ($cur)', _d.transportAmount, (v) => _d.transportAmount = v, optional: true);
       case 'scholarship':
         return _yesNo(_d.scholarship, (v) => setState(() => _d.scholarship = v),
+            question: 'Do you receive a scholarship?',
             amountLabel: 'Scholarship per month ($cur)', amount: _d.scholarshipAmount,
             onAmount: (v) => _d.scholarshipAmount = v);
       case 'partTime':
         return _yesNo(_d.partTime, (v) => setState(() => _d.partTime = v),
+            question: 'Do you work part-time?',
             amountLabel: 'Part-time income per month ($cur)', amount: _d.partTimeAmount,
             onAmount: (v) => _d.partTimeAmount = v);
       case 'income':
@@ -299,8 +301,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       ]);
 
   Widget _yesNo(bool value, ValueChanged<bool> onChanged,
-      {required String amountLabel, required String amount, required ValueChanged<String> onAmount}) {
+      {required String question, required String amountLabel, required String amount,
+      required ValueChanged<String> onAmount}) {
     return _pad([
+      Text(question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 14),
       Wrap(spacing: 8, children: [
         ChoiceChip(label: const Text('Yes'), selected: value, onSelected: (_) => onChanged(true)),
         ChoiceChip(label: const Text('No'), selected: !value, onSelected: (_) => onChanged(false)),
@@ -314,13 +319,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     ]);
   }
 
-  Widget _moneyField(String label, String value, ValueChanged<String> onChanged, {bool number = true}) => TextField(
-        keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        inputFormatters: number ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
-        decoration: InputDecoration(labelText: label),
-        controller: TextEditingController(text: value)..selection = TextSelection.collapsed(offset: value.length),
-        onChanged: onChanged,
-      );
+  // Keyed by label so each step gets its own field that keeps its controller
+  // across the wizard's setState rebuilds (the old inline controller was recreated
+  // every build, resetting the cursor and swallowing backspaces).
+  Widget _moneyField(String label, String value, ValueChanged<String> onChanged, {bool number = true}) =>
+      _DraftField(key: ValueKey(label), label: label, initial: value, onChanged: onChanged, number: number);
 
   Widget _nav({required bool enabled, String? skipLabel}) => Row(
         children: [
@@ -334,5 +337,44 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
           ],
           Expanded(child: FilledButton(onPressed: enabled ? _next : null, child: const Text('Next'))),
         ],
+      );
+}
+
+/// A wizard text field that owns its controller (seeded once from [initial]) so
+/// editing survives the parent's frequent setState rebuilds. Recreating the
+/// controller on every build — the previous approach — reset the cursor to the end
+/// and made backspace look like it was being ignored.
+class _DraftField extends StatefulWidget {
+  const _DraftField(
+      {super.key, required this.label, required this.initial, required this.onChanged, this.number = true});
+  final String label;
+  final String initial;
+  final ValueChanged<String> onChanged;
+  final bool number;
+
+  @override
+  State<_DraftField> createState() => _DraftFieldState();
+}
+
+class _DraftFieldState extends State<_DraftField> {
+  late final TextEditingController _c = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: _c,
+        keyboardType:
+            widget.number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        inputFormatters: widget.number ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
+        autocorrect: false,
+        enableSuggestions: false,
+        textCapitalization: widget.number ? TextCapitalization.none : TextCapitalization.words,
+        decoration: InputDecoration(labelText: widget.label),
+        onChanged: widget.onChanged,
       );
 }

@@ -91,7 +91,19 @@ class _TourOverlayState extends ConsumerState<_TourOverlay> {
 
     // Non-modal: a light dim keeps the real screen visible while the companion
     // bubble sits at the top and narrates. Tapping the dim is absorbed.
-    return Material(
+    // The tour lives in the app-root builder (above the Navigator), so a PopScope
+    // can't see the system back here — BackButtonListener intercepts it directly so
+    // back steps through the tour instead of closing the whole app.
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        if (s.isFirst) {
+          n.skip();
+        } else {
+          n.back();
+        }
+        return true; // handled — never let back exit the app mid-tour
+      },
+      child: Material(
       type: MaterialType.transparency,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -143,6 +155,14 @@ class _TourOverlayState extends ConsumerState<_TourOverlay> {
                           controller: _nameCtrl,
                           style: const TextStyle(color: Colors.white),
                           cursorColor: const Color(0xFF7C5CFF),
+                          // No IME composing region: predictive text + autocorrect
+                          // fight the overlay's rebuilds and make backspace look
+                          // "stuck" while the text keeps extending. Commit each key.
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _saveNameThenNext(),
                           decoration: InputDecoration(
                             hintText: 'Your name',
                             hintStyle: const TextStyle(color: Color(0x66FFFFFF)),
@@ -184,6 +204,7 @@ class _TourOverlayState extends ConsumerState<_TourOverlay> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
