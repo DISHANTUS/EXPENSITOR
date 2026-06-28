@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.intelligence.commentary.ollama import adapter, narrator
+from app.intelligence.commentary.ollama import adapter, guard, narrator
 from app.intelligence.mood import greeting_narration
 
 log = logging.getLogger("expensitor.ollama")
@@ -120,6 +120,46 @@ async def complete(messages: list[dict[str, str]]) -> str:
             return await _post(None)            # a model/version that rejects "think" → plain call
 
     return await asyncio.wait_for(_call(), timeout=settings.OLLAMA_TIMEOUT_SECONDS)
+
+
+_REPHRASE_SYSTEM = (
+    "You make a personal-finance assistant's reply sound warm and natural. Keep EVERY "
+    "number, money amount, percentage, date, time and name EXACTLY as written — never "
+    "add, remove, change, or invent any figure or name. Same meaning, one or two short "
+    "sentences. Reply with ONLY the rephrased text."
+)
+
+
+async def narrate_text(text: str, *, generate=None) -> str:
+    """Rephrase a deterministic chat answer conversationally WITHOUT altering any
+    grounded fact (number / money / percent / date / time). Returns the original on
+    disabled / failure / guard rejection, so it can never change the meaning or invent
+    a figure. The caller gates on settings.OLLAMA_ENABLED."""
+    src = (text or "").strip()
+    if not src or (generate is None and not settings.OLLAMA_ENABLED):
+        return text
+    facts = guard.extract_facts(src)
+    spec = guard.GroundingSpec(
+        allowed=dict(facts),
+        required={k: facts[k] for k in ("money", "percent", "date", "time", "number")},
+        escalation_markers=guard.escalation_markers(src),
+        confidence_hedged=guard.is_hedged(src),
+        enforce_paragraph_count=False,
+        allow_new_entities=True,   # casual words ok; figures stay strictly grounded
+    )
+    gen = generate or complete
+    _METRICS["attempts"] += 1
+    try:
+        out = (await gen([{"role": "system", "content": _REPHRASE_SYSTEM},
+                          {"role": "user", "content": src}])).strip()
+    except Exception:  # noqa: BLE001 — any model/transport failure => keep deterministic
+        _METRICS["error"] += 1
+        return text
+    if out and guard.validate(out, spec).ok:
+        _METRICS["success"] += 1
+        return out
+    _METRICS["fallback"] += 1
+    return text
 
 
 def _too_similar(text: str, recents: list[str]) -> bool:

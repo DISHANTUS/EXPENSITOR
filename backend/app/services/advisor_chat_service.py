@@ -464,7 +464,28 @@ async def _run_command(db, user_id, ctx: ChatContext, command: str, today: date)
     return _action_turn(res, ctx, command=command, answers=None, request_id=rid)
 
 
+def _narratable(turn: ChatTurn) -> bool:
+    # Only the deterministic engines' plain-text answers get a conversational rephrase
+    # — never action confirmations (a yes/no gateway whose wording must stay exact) or
+    # structured cards (report / forecast / drilldown / clarify / help / tour).
+    return bool(turn.message) and turn.type in ("answer", "advisory") \
+        and not any(o.message in ("yes", "no") for o in turn.follow_ups)
+
+
 async def chat(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: ChatContext | None) -> ChatTurn:
+    """Public entry. Route the message (LLM brain when a model is reachable, else the
+    deterministic ladder), then — only when a model is reachable — let it phrase the
+    engine's answer conversationally. The narration is grounded: it can never change a
+    number/name, and falls back to the exact deterministic text on any doubt (Slice 3)."""
+    turn = await _route_turn(db, user_id, message=message, session=session)
+    if settings.OLLAMA_ENABLED and _narratable(turn):
+        narrated = await ollama_service.narrate_text(turn.message or "")
+        if narrated != turn.message:
+            turn = turn.model_copy(update={"message": narrated})
+    return turn
+
+
+async def _route_turn(db: AsyncSession, user_id: uuid.UUID, *, message: str, session: ChatContext | None) -> ChatTurn:
     today = await calendar_service.user_today(db, user_id)
     t = message.lower().strip()
     ctx = _ctx(session)

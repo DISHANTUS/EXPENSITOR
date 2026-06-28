@@ -101,3 +101,39 @@ async def test_brain_off_by_default_is_pure_deterministic(client: AsyncClient):
     h = await _auth(client, "off@example.com")
     turn = await _chat(client, h, "take me to settings")
     assert turn["type"] == "help" and turn["route"] == "/settings"   # deterministic nav still works
+
+
+# --- Slice 3: grounded conversational narration ------------------------------
+
+async def test_narrate_text_keeps_facts_or_falls_back(monkeypatch):
+    monkeypatch.setattr(settings, "OLLAMA_ENABLED", True)
+    src = "Yes - savings up 12% vs last month."
+
+    async def faithful(messages):
+        return "Great news! Your savings are up 12% versus last month."
+    out = await ollama_service.narrate_text(src, generate=faithful)
+    assert out != src and "12%" in out          # warmer, fact intact
+
+    async def liar(messages):
+        return "Your savings are up 20% versus last month."   # changed the number
+    assert await ollama_service.narrate_text(src, generate=liar) == src   # rejected → original
+
+    async def boom(messages):
+        raise RuntimeError("model down")
+    assert await ollama_service.narrate_text(src, generate=boom) == src   # failure → original
+
+
+async def test_chat_narrates_engine_answer_when_brain_on(client: AsyncClient, monkeypatch):
+    rephrased = "You have nothing logged yet — add an expense or income and ask me again."
+
+    async def fake_complete(messages):
+        # the router defers, then the same model phrases the engine's answer
+        if "intent router" in messages[0]["content"]:
+            return '{"kind":"passthrough"}'
+        return rephrased
+    monkeypatch.setattr(settings, "OLLAMA_ENABLED", True)
+    monkeypatch.setattr(ollama_service, "complete", fake_complete)
+    h = await _auth(client, "narr@example.com")
+    turn = await _chat(client, h, "blah blah zzz qqq")   # falls to the deterministic answer
+    assert turn["type"] == "answer"
+    assert turn["message"] == rephrased   # the engine's answer came back conversationally phrased

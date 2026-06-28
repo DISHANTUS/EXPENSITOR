@@ -70,5 +70,8 @@ inference API would not — and is also ruled out by the project's no-paid-LLM r
   `move <event> to <YYYY-MM-DD>`) is what the deterministic parser reliably handles.
   Lending and goal-creation pass through until the parser supports them.
 
-Next (Slice 3): let the LLM narrate engine *results* conversationally (grounded — the
-numbers still come from the engines, the model only phrases them).
+- **Narrates results conversationally** (Slice 3): when the brain is on, the engine's
+  plain-text answer is rephrased warmly by the model — but through a grounding guard
+  that rejects any output which adds/changes a number, money amount, %, date or name,
+  falling back to the exact deterministic text. So the math is always the engines';
+  the model only changes the wording. Costs one extra ~2.5s model call per answer.

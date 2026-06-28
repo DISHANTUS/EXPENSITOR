@@ -108,6 +108,11 @@ def escalation_markers(text: str) -> set[str]:
     return {m for m in _ESCALATION_MARKERS if m in low}
 
 
+def is_hedged(text: str) -> bool:
+    """Whether the text carries a low-confidence / limited-history hedge."""
+    return bool(_HEDGE_RE.search(text or ""))
+
+
 # --- spec + result ----------------------------------------------------------
 @dataclass(frozen=True)
 class GroundingSpec:
