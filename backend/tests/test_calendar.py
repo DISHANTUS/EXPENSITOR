@@ -92,25 +92,27 @@ async def test_month_grid_has_income_and_event_markers(client: AsyncClient) -> N
 async def test_month_grid_materializes_recurring_and_lent_markers(client: AsyncClient) -> None:
     h = await _auth(client, "cal5@example.com")
     today = _today()
-    # A subscription due on the 12th of this month.
+    # Lend due a few days out — ALWAYS in the future, so it shows the 'lent' marker.
+    # (A past due date correctly shows 'repay_overdue' instead, so a fixed day-of-month
+    # made this test fail whenever it ran late in the month.)
+    due = today + timedelta(days=3)
+    # A subscription on the 12th of the month we'll inspect.
     await client.post(
         "/api/v1/recurring-rules",
         json={"rule_type": "subscription", "label": "Netflix", "original_amount": "200",
               "original_currency": "INR", "recurrence_day": 12,
-              "start_date": today.replace(day=1).isoformat()},
+              "start_date": due.replace(day=1).isoformat()},
         headers=h,
     )
-    # Lent money expected back on the 20th.
-    due = today.replace(day=20)
     await client.post(
         "/api/v1/receivables",
         json={"title": "Loan to Ravi", "source_name": "Ravi", "source_type": "friend", "kind": "one_time",
               "original_amount": "3000", "original_currency": "INR", "expected_date": due.isoformat()},
         headers=h,
     )
-    month = (await client.get(f"/api/v1/calendar/month?year={today.year}&month={today.month}", headers=h)).json()
+    month = (await client.get(f"/api/v1/calendar/month?year={due.year}&month={due.month}", headers=h)).json()
     by_day = {c["date"]: c["markers"] for c in month["days"]}
-    assert "subscription" in by_day[today.replace(day=12).isoformat()]
+    assert "subscription" in by_day[due.replace(day=12).isoformat()]
     assert "lent" in by_day[due.isoformat()]
 
 
