@@ -137,16 +137,26 @@ class _QuestionStep extends StatelessWidget {
         const SizedBox(height: 16),
         child,
         const SizedBox(height: 24),
-        Row(children: [
-          TextButton(onPressed: busy ? null : onBack, child: const Text('Back')),
-          const Spacer(),
-          FilledButton(
-            onPressed: (busy || onNext == null) ? null : onNext,
-            child: busy
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(nextLabel),
-          ),
-        ]),
+        // Every button MUST be Expanded here. The theme gives buttons
+        // minimumSize: Size.fromHeight(50) — i.e. width: double.infinity — so a
+        // bare button inside a Row gets an infinite tight width and fails
+        // layout: invisible and untappable in release, where the assert is
+        // compiled out. Expanded bounds it. Same pattern as the interview's
+        // _nav().
+        Row(
+          children: [
+            Expanded(child: OutlinedButton(onPressed: busy ? null : onBack, child: const Text('Back'))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: (busy || onNext == null) ? null : onNext,
+                child: busy
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(nextLabel),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -233,15 +243,19 @@ class _BuyFlowState extends ConsumerState<_BuyFlow> {
           child: _field(_cost, 'Cost (${widget.currency})', number: true, onChanged: (_) => setState(() {})),
         );
       default:
+        // The date is REQUIRED, not optional: the amount we collected is the
+        // total cost, so this must be a one-off custom_goal — which the
+        // backend rightly refuses without a target_date. It's also what makes
+        // the plan real (cost spread over the time left = what to set aside).
         return _QuestionStep(
           prompt: 'When do you want it by?',
           onBack: _prev,
-          onNext: _submit,
+          onNext: _by == null ? null : _submit,
           nextLabel: 'Add to plan',
           busy: _busy,
           child: _DatePickerRow(
             value: _by,
-            hint: 'Pick a target date (optional)',
+            hint: 'Pick a target date',
             onPick: (d) => setState(() => _by = d),
           ),
         );
@@ -287,7 +301,9 @@ class _SaveFlowState extends ConsumerState<_SaveFlow> {
             name: _name.text.trim().isEmpty ? 'Savings goal' : _name.text.trim(),
             amount: amt.toString(),
             currency: widget.currency,
-            kind: _by != null ? 'custom_goal' : 'monthly_target',
+            // Always custom_goal: the amount collected is a TOTAL target, and
+            // monthly_target would misread it as "save this much every month".
+            kind: 'custom_goal',
             targetDate: _by,
             reason: 'Saving for ${_name.text.trim()}',
           );
@@ -318,10 +334,12 @@ class _SaveFlowState extends ConsumerState<_SaveFlow> {
           child: _field(_amount, 'Target (${widget.currency})', number: true, onChanged: (_) => setState(() {})),
         );
       default:
+        // Required for the same reason as the buy flow — a total needs a
+        // deadline to become a plan, and custom_goal demands one.
         return _QuestionStep(
-          prompt: 'By when? (optional)',
+          prompt: 'By when do you want to have it saved?',
           onBack: _prev,
-          onNext: _submit,
+          onNext: _by == null ? null : _submit,
           nextLabel: 'Add goal',
           busy: _busy,
           child: _DatePickerRow(
@@ -501,16 +519,21 @@ class _OtherFlow extends StatelessWidget {
           style: TextStyle(color: p.muted, height: 1.4),
         ),
         const SizedBox(height: 20),
+        // Expanded for the same reason as _QuestionStep: the theme's filled
+        // buttons are full-width (minimumSize: Size.fromHeight(50)), so a bare
+        // one in a Row gets an infinite tight width and silently fails layout.
         Row(children: [
-          TextButton(onPressed: onBack, child: const Text('Back')),
-          const Spacer(),
-          FilledButton.icon(
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            // The advisor already routes anything unusual through the engines
-            // (and the LLM when reachable) — so "something else" is never a
-            // dead end, just a different door into the same intelligence.
-            onPressed: () => context.go('/advisor'),
-            label: const Text('Talk to Advary'),
+          Expanded(child: OutlinedButton(onPressed: onBack, child: const Text('Back'))),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              icon: const Icon(Icons.chat_bubble_outline, size: 18),
+              // The advisor already routes anything unusual through the engines
+              // (and the LLM when reachable) — so "something else" is never a
+              // dead end, just a different door into the same intelligence.
+              onPressed: () => context.go('/advisor'),
+              label: const Text('Talk to Advary'),
+            ),
           ),
         ]),
       ],

@@ -94,3 +94,22 @@ async def test_dependencies_endpoint(client: AsyncClient):
     resp = await client.get("/api/v1/advisor/dependencies", headers=h)
     assert resp.status_code == 200
     assert "dependencies" in resp.json() and "explanations" in resp.json()
+
+
+async def test_custom_goal_requires_a_target_date(client: AsyncClient):
+    """Contract the Planning "buy something" flow depends on: a custom_goal is a
+    one-off total, so it is meaningless (and rejected) without a deadline.
+    Caught live — the flow offered an optional date and 422'd when skipped."""
+    headers = await _auth(client, "customgoaldate@example.com")
+    resp = await client.post(SAVINGS, headers=headers, json={
+        "name": "Headphones", "kind": "custom_goal",
+        "original_amount": "3000", "original_currency": "INR",
+    })
+    assert resp.status_code == 422
+    assert "target_date" in resp.text
+
+    resp = await client.post(SAVINGS, headers=headers, json={
+        "name": "Headphones", "kind": "custom_goal",
+        "original_amount": "3000", "original_currency": "INR", "target_date": FUTURE,
+    })
+    assert resp.status_code == 201
