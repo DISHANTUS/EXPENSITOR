@@ -114,6 +114,26 @@ def test_a_streak_is_only_mentioned_once_it_is_one():
     assert any("2 days in a row" in l for l in _lines(streak=2))
 
 
+def test_a_one_day_window_is_not_reported_as_a_multi_day_total():
+    # Caught by reading the live output: a brand-new account produced
+    # "Across the last 1 days you're INR 847.74 under budget overall" — broken
+    # grammar, and the same number the line above had already given.
+    lines = _lines(window_days=1, window_net=Decimal("847.74"))
+    assert not any("Across the last" in l for l in lines)
+    assert not any(" 1 days" in l for l in lines)
+
+
+def test_a_real_multi_day_total_is_still_reported():
+    assert any(
+        "Across the last 4 days you're INR 800.97 under budget overall." == l
+        for l in _lines(window_days=4, window_net=Decimal("800.97"))
+    )
+    assert any(
+        "Across the last 4 days you're INR 46.77 over budget overall." == l
+        for l in _lines(window_days=4, window_net=Decimal("-46.77"))
+    )
+
+
 def test_the_goal_line_says_what_is_left_and_when():
     lines = _lines(goal={"name": "Headphones", "remaining": "2500", "days_left": 30})
     assert any("Still INR 2,500 to go for Headphones, 30 days out." == l for l in lines)

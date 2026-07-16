@@ -177,10 +177,13 @@ def _lines(
     if streak >= 2:
         out.append(f"That's {streak} days in a row under budget.")
 
-    if window_net > _ZERO:
-        out.append(f"Across the last {window_days} days you're {_money(window_net, currency)} under budget overall.")
-    elif window_net < _ZERO:
-        out.append(f"Across the last {window_days} days you're {_money(-window_net, currency)} over budget overall.")
+    # A "multi-day total" over one day is just the line above said twice — and
+    # it reads "the last 1 days". Needs at least two days to be worth saying.
+    if window_days >= 2 and window_net != _ZERO:
+        direction = "under" if window_net > _ZERO else "over"
+        out.append(
+            f"Across the last {window_days} days you're {_money(abs(window_net), currency)} {direction} budget overall."
+        )
 
     out.extend(_goal_lines(goal, currency))
     return out
