@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.diary import (
@@ -14,7 +14,7 @@ from app.schemas.diary import (
     DiaryEntryWithQuestion,
     DiaryPatternsOut,
 )
-from app.services import diary_service
+from app.services import diary_service, mail_service
 
 router = APIRouter(prefix="/diary", tags=["diary"])
 
@@ -26,9 +26,16 @@ router = APIRouter(prefix="/diary", tags=["diary"])
     summary="Write a diary entry",
 )
 async def create_entry(
-    data: DiaryEntryCreate, db: DbSession, current_user: CurrentUser
+    data: DiaryEntryCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> DiaryEntryWithQuestion:
     entry, question = await diary_service.create(db, current_user.id, text=data.text, entry_date=data.entry_date)
+    # After the response, never during it: if this note parked work for the
+    # model, let the developer know there's a backlog (a count, once a day).
+    # SMTP is slow and blocking — nobody writing a diary note should wait on it.
+    background_tasks.add_task(mail_service.notify_backlog_if_due)
     return DiaryEntryWithQuestion(entry=DiaryEntryOut.model_validate(entry), question=question)
 
 

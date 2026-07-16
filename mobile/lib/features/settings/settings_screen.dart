@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
+import 'enrichment_queue_tile.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/mood_repository.dart';
@@ -561,6 +562,7 @@ class SettingsScreen extends ConsumerWidget {
               padding: EdgeInsets.fromLTRB(4, 4, 4, 4),
               child: Text('Developer / Testing', style: TextStyle(fontWeight: FontWeight.w600)),
             ),
+            const EnrichmentQueueTile(),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.event_available_outlined),

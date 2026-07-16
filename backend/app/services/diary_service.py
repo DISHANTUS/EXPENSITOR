@@ -18,7 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.config import settings as app_settings
 from app.intelligence.companion import diary_followup, diary_patterns
 from app.models.diary_entry import DiaryEntry
-from app.services import calendar_service, ollama_service
+from app.services import calendar_service, enrichment_service, ollama_service
 
 # How far back the pattern view looks. Long enough for a weekday habit to show
 # up several times, short enough that it describes who you are now.
@@ -48,7 +48,45 @@ async def create(
     await db.refresh(entry)
 
     question = await diary_followup.next_question(entry.text, details=[], generate=_generate())
+    await _park_if_worth_a_second_look(db, entry, question)
     return entry, question
+
+
+def _exhausted(entry: DiaryEntry) -> bool:
+    """We've asked as much as we're ever going to about this entry.
+
+    Distinct from "nothing could see a question": the cap is final, and no model
+    will ever get past it. Confusing the two both parks jobs that are guaranteed
+    to do nothing AND leaves finished entries open forever."""
+    return len(entry.details or []) >= diary_followup.MAX_QUESTIONS
+
+
+async def _park_if_worth_a_second_look(db: AsyncSession, entry: DiaryEntry, question: str | None) -> None:
+    """Park this entry for the model IF, and only if, a model could still add
+    something: the rules found nothing, we haven't hit the question cap, AND no
+    model was reachable to try.
+
+    If the rules answered, there's nothing to catch up on. If we've asked
+    enough, no model may ask more. If a model already looked and found nothing,
+    asking the same model the same question tomorrow gets the same nothing.
+
+    Never lets a queue problem reach the user — they've already got their
+    answer; this is a bonus that either lands later or doesn't."""
+    if question is not None or enrichment_service.model_available() or _exhausted(entry):
+        return
+    try:
+        await enrichment_service.enqueue_diary_followup(db, entry.user_id, entry.id)
+        await db.commit()
+    except Exception:  # noqa: BLE001 — a failed park is a missed bonus, never an error
+        await db.rollback()
+        # A rollback expires every object in the session, INCLUDING the entry
+        # the caller is about to serialize — which then tries to lazy-load
+        # outside the async context and 500s. The user would lose their note
+        # because a bonus failed, which is precisely backwards. Reload it.
+        try:
+            await db.refresh(entry)
+        except Exception:  # noqa: BLE001 — nothing left to try; the note is already saved
+            pass
 
 
 async def get(db: AsyncSession, user_id: uuid.UUID, entry_id: uuid.UUID) -> DiaryEntry:
@@ -94,13 +132,21 @@ async def answer(
     # JSONB reassignment isn't always seen by the ORM's change tracking when the
     # list is mutated-then-rebound; be explicit rather than lose the answer.
     flag_modified(entry, "details")
+    entry.pending_question = None  # they just answered it; it isn't pending any more
 
     next_q = await diary_followup.next_question(entry.text, details=details, generate=_generate())
-    if next_q is None:
-        entry.closed = True  # nothing more to ask; stop pestering
+    if next_q is None and (enrichment_service.model_available() or _exhausted(entry)):
+        # Either a model looked and had nothing more, or we've asked our fill.
+        # Genuinely done — close it and stop pestering. The only case left open
+        # is "no model was around to look", which the park below handles.
+        entry.closed = True
 
     await db.commit()
     await db.refresh(entry)
+
+    # Rules found nothing and no model was around to try: park it rather than
+    # close the entry on a question that was never actually asked.
+    await _park_if_worth_a_second_look(db, entry, next_q)
     return entry, next_q
 
 

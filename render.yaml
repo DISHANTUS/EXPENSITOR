@@ -42,6 +42,22 @@ services:
         sync: false             # use a password with no URL-special chars (@ : / ? #)
       - key: POSTGRES_DB
         sync: false
+      # --- Developer backlog digest (OPTIONAL; leave unset and no mail is sent) ---
+      # Tells the developer HOW MANY items are waiting for the local model — a
+      # count, once a day, never anything a user wrote. See app/services/mail_service.py.
+      # SMTP_PASSWORD is a Gmail *app password* (myaccount.google.com -> Security
+      # -> 2-Step Verification -> App passwords), NOT the account password.
+      # Set these in the Render dashboard; sync:false keeps them out of git.
+      - key: SMTP_HOST
+        sync: false             # smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false             # advary2006@gmail.com
+      - key: SMTP_PASSWORD
+        sync: false             # the 16-character app password, no spaces
+      - key: SMTP_FROM
+        sync: false             # advary2006@gmail.com
       # CORS is not needed for the native APK (dio). Add a JSON array only for a web client:
       # - key: BACKEND_CORS_ORIGINS
       #   value: '["https://your-web-app.example"]'

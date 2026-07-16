@@ -22,6 +22,7 @@ class DiaryEntry {
     required this.text,
     this.details = const [],
     this.closed = false,
+    this.pendingQuestion,
   });
 
   factory DiaryEntry.fromJson(Map<String, dynamic> j) => DiaryEntry(
@@ -33,6 +34,7 @@ class DiaryEntry {
             DiaryDetail.fromJson(Map<String, dynamic>.from(d as Map)),
         ],
         closed: j['closed'] == true,
+        pendingQuestion: j['pending_question'] as String?,
       );
 
   final String id;
@@ -40,6 +42,10 @@ class DiaryEntry {
   final String text;
   final List<DiaryDetail> details;
   final bool closed;
+
+  /// A question the model worked out after the fact, while the user was away.
+  /// Null for almost every entry.
+  final String? pendingQuestion;
 }
 
 /// An entry plus the next thing Advary would like to ask. A null question is

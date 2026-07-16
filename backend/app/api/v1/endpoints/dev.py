@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from app.api.deps import CurrentUser, DbSession, RequireDeveloper
 from app.models import AdviceMemory, CompanionEvent
 from app.models.enums import AdviceStatus, CompanionEventType
-from app.services import backup_service, reset_service
+from app.services import backup_service, enrichment_service, reset_service
 
 router = APIRouter(prefix="/dev", tags=["dev"])
 
@@ -89,3 +89,39 @@ async def backup(current_user: RequireDeveloper, db: DbSession) -> BackupOut:
     return BackupOut(path=str(path), total_rows=total, tables=counts,
                      message=f"Backed up {total} rows to {path.name}. Restore with: "
                              f"python -m app.scripts.backup restore --latest")
+
+
+class EnrichmentSummaryOut(BaseModel):
+    """Counts only. No payloads, no diary text, no user identities — this is a
+    developer view of a queue, not a window into anyone's account."""
+
+    pending: int
+    done: int
+    failed: int
+    skipped: int
+    oldest_pending_at: str | None = None
+    model_available: bool
+
+
+class DrainOut(BaseModel):
+    ran: bool
+    processed: int = 0
+    done: int = 0
+    skipped: int = 0
+    failed: int = 0
+    pending: int = 0
+    reason: str | None = None
+
+
+@router.get("/enrichment", response_model=EnrichmentSummaryOut,
+            summary="How much work is waiting for the local model (developer-only)")
+async def enrichment_summary(current_user: RequireDeveloper, db: DbSession) -> EnrichmentSummaryOut:
+    return EnrichmentSummaryOut(**await enrichment_service.summary(db))
+
+
+@router.post("/enrichment/drain", response_model=DrainOut,
+             summary="Run the parked work now — call once your model is up (developer-only)")
+async def enrichment_drain(current_user: RequireDeveloper, db: DbSession) -> DrainOut:
+    # Safe to call whenever: with no model configured it reports ran=false and
+    # changes nothing, rather than burning through the backlog with failures.
+    return DrainOut(**await enrichment_service.drain(db))

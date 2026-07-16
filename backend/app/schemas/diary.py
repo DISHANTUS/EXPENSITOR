@@ -32,6 +32,10 @@ class DiaryEntryOut(BaseModel):
     details: list[dict[str, Any]] = []
     closed: bool = False
 
+    # A question the model worked out after the fact, waiting for them to come
+    # back. Null for almost every entry.
+    pending_question: str | None = None
+
 
 class DiaryEntryWithQuestion(BaseModel):
     """An entry plus the next thing Advary would like to ask about it. A null

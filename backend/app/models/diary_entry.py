@@ -55,6 +55,11 @@ class DiaryEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False, default=False, server_default=sa_text("false")
     )
 
+    # A question the local model worked out AFTER the fact — parked here by the
+    # catch-up queue when no model was reachable at write time. The user sees it
+    # next time they open the diary; they never waited on it.
+    pending_question: Mapped[str | None] = mapped_column(Text)
+
     # Soft delete, like every other user-owned row here: a deleted diary entry
     # must drop out of pattern learning immediately, but "delete" on a personal
     # diary shouldn't be the one irreversible button in the app.

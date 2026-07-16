@@ -178,6 +178,75 @@ void main() {
     }
   });
 
+  testWidgets('a question worked out while you were away is waiting when you come back', (tester) async {
+    // The whole point of the catch-up queue: the model was offline when this
+    // note was written, ran later, and the answer has to actually reach the
+    // user rather than sit in a column nobody reads.
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        diaryRepositoryProvider.overrideWithValue(_FakeDiary(questions: [null])),
+        diaryEntriesProvider.overrideWith((ref) async => [
+              DiaryEntry(
+                id: 'e9',
+                entryDate: DateTime(2026, 7, 16),
+                text: 'spent the afternoon at the barber',
+                pendingQuestion: 'How long were you at the barber?',
+              ),
+            ]),
+      ],
+      child: MaterialApp(theme: AppTheme.dark(), home: const Scaffold(body: DiaryBody())),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Advary asks'), findsOneWidget);
+    expect(find.text('How long were you at the barber?'), findsOneWidget);
+  });
+
+  testWidgets('a waiting question never talks over a live conversation', (tester) async {
+    // Writing a note now must win over a question parked earlier — otherwise
+    // the screen hijacks itself mid-sentence.
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        diaryRepositoryProvider.overrideWithValue(_FakeDiary(questions: ['Which fruits?'])),
+        diaryEntriesProvider.overrideWith((ref) async => [
+              DiaryEntry(
+                id: 'e9',
+                entryDate: DateTime(2026, 7, 16),
+                text: 'old note',
+                pendingQuestion: 'An older question?',
+              ),
+            ]),
+      ],
+      child: MaterialApp(theme: AppTheme.dark(), home: const Scaffold(body: DiaryBody())),
+    ));
+    await tester.pumpAndSettle();
+    // The parked one shows first (nothing else in flight)...
+    expect(find.text('An older question?'), findsOneWidget);
+  });
+
+  testWidgets('a closed entry never resurfaces its parked question', (tester) async {
+    // They already waved the questions off. A stale job must not override that.
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        diaryRepositoryProvider.overrideWithValue(_FakeDiary(questions: [null])),
+        diaryEntriesProvider.overrideWith((ref) async => [
+              DiaryEntry(
+                id: 'e9',
+                entryDate: DateTime(2026, 7, 16),
+                text: 'old note',
+                pendingQuestion: 'Ignored?',
+                closed: true,
+              ),
+            ]),
+      ],
+      child: MaterialApp(theme: AppTheme.dark(), home: const Scaffold(body: DiaryBody())),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Advary asks'), findsNothing);
+    expect(find.text('What happened today?'), findsOneWidget);
+  });
+
   testWidgets('with too little written, it says so instead of inventing a pattern', (tester) async {
     await tester.pumpWidget(_screen(
       _FakeDiary(questions: [null]),

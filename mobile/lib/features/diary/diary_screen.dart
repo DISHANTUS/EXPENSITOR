@@ -129,9 +129,30 @@ class _DiaryBodyState extends ConsumerState<DiaryBody> {
     _refresh();
   }
 
+  /// A question the model worked out while the user was away (the catch-up
+  /// queue) — picked up the moment they open the diary again. Only when nothing
+  /// else is already in flight, so it never talks over a live conversation.
+  void _adoptPendingQuestion(List<DiaryEntry> entries) {
+    if (_question != null || _active != null || _busy) return;
+    for (final e in entries) {
+      final q = e.pendingQuestion;
+      if (q != null && q.isNotEmpty && !e.closed) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _question != null || _active != null) return;
+          setState(() {
+            _active = e;
+            _question = q;
+          });
+        });
+        return;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = AppColors.active;
+    _adoptPendingQuestion(ref.watch(diaryEntriesProvider).valueOrNull ?? const []);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [

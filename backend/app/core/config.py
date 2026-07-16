@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     # the users.is_developer flag — either one grants access.
     DEVELOPER_EMAILS: list[str] = ["advary2006@gmail.com"]
 
+    # --- Developer alerts (optional; off unless configured) ---
+    # Used ONLY to tell the developer how many items are waiting for the local
+    # model. Never carries user content — see mail_service. Leave unset and the
+    # whole thing is a no-op, which is the default everywhere including tests.
+    # SMTP_PASSWORD is a Gmail *app password*, set in the host's env (Render
+    # dashboard), never committed.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+
     # --- Security ---
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

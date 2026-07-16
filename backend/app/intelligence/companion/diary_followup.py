@@ -81,7 +81,10 @@ _QUESTION_VOCAB = frozenset(
     """.split()
 )
 
-_MAX_QUESTIONS = 3  # a note is not an interrogation
+# Public: diary_service needs to tell "no question because we've asked enough"
+# apart from "no question because nothing could see one" — the first is final,
+# the second is worth another look once a model is up.
+MAX_QUESTIONS = 3  # a note is not an interrogation
 
 _SYSTEM = """You are helping someone keep a short diary. Given their note, ask ONE short,
 natural follow-up question about something they mentioned but left vague.
@@ -225,7 +228,7 @@ async def next_question(
     `generate` is an injected callable (messages -> str), same contract as
     llm_router.route / judge_sufficiency / planning_intent.interpret."""
     details = details or []
-    if len(details) >= _MAX_QUESTIONS:
+    if len(details) >= MAX_QUESTIONS:
         return None  # stop before a diary becomes a form
 
     asked = {str((d or {}).get("question") or "") for d in details}
