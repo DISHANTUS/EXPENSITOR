@@ -7,6 +7,7 @@ import '../auth/auth_state.dart';
 import '../voice/conversation_controller.dart';
 import '../voice/voice_service.dart';
 import '../../features/advisor/chat_screen.dart';
+import '../../features/diary/diary_screen.dart';
 import '../../features/appearance/appearance_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/budget_setup/budget_setup_screen.dart';
@@ -61,6 +62,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/convert', builder: (_, __) => const CurrencyCenterScreen()),
       GoRoute(path: '/budget-setup', builder: (_, __) => const BudgetSetupScreen()),
       GoRoute(path: '/plan', builder: (_, __) => const PlanScreen()),
+      GoRoute(path: '/diary', builder: (_, __) => const DiaryScreen()),
       GoRoute(path: '/profile-summary', builder: (_, __) => const ProfileSummaryScreen()),
       // ?ask= pre-fills the composer, so text typed on another screen (Planning)
       // travels with the user instead of having to be retyped.

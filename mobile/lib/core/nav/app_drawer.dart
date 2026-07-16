@@ -27,6 +27,7 @@ const _destinations = <_Dest>[
   _Dest('Planning', Icons.account_balance_wallet_outlined, '/budget-setup'),
   _Dest('Your Plan', Icons.insights_outlined, '/plan'),
   _Dest('Plan Today', Icons.today_outlined, '/plan-today'),
+  _Dest('Diary', Icons.edit_note_outlined, '/diary'),
   _Dest('Timeline', Icons.timeline, '/timeline'),
   _Dest('Future Me', Icons.auto_graph, '/future-me'),
   _Dest('People', Icons.people_outline, '/relationships'),

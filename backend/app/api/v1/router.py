@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     daily_plans,
     daily_report,
     decisions,
+    diary,
     dev,
     expenses,
     facts,
@@ -56,6 +57,7 @@ api_router.include_router(categories.router)
 api_router.include_router(calendar.router)
 api_router.include_router(daily_plans.router)
 api_router.include_router(daily_report.router)
+api_router.include_router(diary.router)
 api_router.include_router(budget.router)
 api_router.include_router(persons.router)
 api_router.include_router(recurring_rules.router)
