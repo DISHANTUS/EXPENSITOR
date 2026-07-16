@@ -95,18 +95,28 @@ class CompanionOrbButton extends ConsumerWidget {
       onLongPress: () => _showFeeling(context),
       child: top == null
           ? orb
-          : _AttentionRing(size: size, color: top.ringColor(Theme.of(context).colorScheme), child: orb),
+          : _AttentionRing(
+              size: size,
+              color: top.ringColor(Theme.of(context).colorScheme),
+              // "!" only when Advary is actually waiting on an answer; anything
+              // that's merely news keeps the quieter dot.
+              exclaim: top.wantsAnswer,
+              child: orb,
+            ),
     );
   }
 }
 
 /// A pulsing "I have something to say" halo around the orb — a steady breathing
-/// glow + an expanding radar ping + a small badge dot. Subtle, never a popup.
+/// glow + an expanding radar ping + a small badge. Subtle, never a popup.
 class _AttentionRing extends StatefulWidget {
-  const _AttentionRing({required this.size, required this.color, required this.child});
+  const _AttentionRing({required this.size, required this.color, required this.child, this.exclaim = false});
   final double size;
   final Color color;
   final Widget child;
+
+  /// Turns the badge dot into an exclamation mark: Advary is waiting on you.
+  final bool exclaim;
 
   @override
   State<_AttentionRing> createState() => _AttentionRingState();
@@ -170,18 +180,34 @@ class _AttentionRingState extends State<_AttentionRing> with SingleTickerProvide
             },
             child: widget.child,
           ),
-          // Badge dot, top-right.
+          // Badge, top-right: an exclamation mark when Advary is waiting on an
+          // answer, otherwise a quiet dot.
           Positioned(
             top: -2,
             right: -2,
             child: Container(
-              width: 12,
-              height: 12,
+              width: widget.exclaim ? 16 : 12,
+              height: widget.exclaim ? 16 : 12,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: widget.color,
                 border: Border.all(color: AppColors.hairline(0.85), width: 1.5),
               ),
+              child: widget.exclaim
+                  ? const Text(
+                      '!',
+                      // An explicit style, not a theme one: this renders inside
+                      // overlay/scaffold layers where theme text styles resolve
+                      // to nothing and the glyph silently disappears.
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        height: 1.05,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                  : null,
             ),
           ),
         ],

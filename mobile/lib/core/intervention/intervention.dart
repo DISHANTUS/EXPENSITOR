@@ -15,6 +15,10 @@ enum InterventionTrigger {
   subscriptionDue,
   reminder,
   relationshipLearning,
+  /// Advary has check-in questions waiting to be answered. Unlike the others
+  /// this one doesn't argue its case in the sheet — it points at the Planning
+  /// page, where the questions actually live, and offers a ride there.
+  pendingQuestions,
   generic,
 }
 
@@ -73,6 +77,16 @@ class Intervention {
   final String? actionRoute; // optional navigation when the action is taken
   final String? inputLabel; // when set, Advary asks for a free-text answer (e.g. a name)
   final Map<String, dynamic> payload; // trigger-specific data
+
+  /// True when Advary is waiting on the user for something, rather than just
+  /// mentioning it. Drives the orb's "!" badge — an exclamation should mean
+  /// "you owe me an answer", not merely "there's news", or it stops meaning
+  /// anything at all.
+  bool get wantsAnswer =>
+      question != null ||
+      choices.isNotEmpty ||
+      inputLabel != null ||
+      trigger == InterventionTrigger.pendingQuestions;
 
   Color ringColor(ColorScheme cs) => switch (priority) {
         InterventionPriority.urgent => const Color(0xFFE53935),

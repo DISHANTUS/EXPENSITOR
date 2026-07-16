@@ -62,7 +62,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/budget-setup', builder: (_, __) => const BudgetSetupScreen()),
       GoRoute(path: '/plan', builder: (_, __) => const PlanScreen()),
       GoRoute(path: '/profile-summary', builder: (_, __) => const ProfileSummaryScreen()),
-      GoRoute(path: '/advisor', builder: (_, __) => const ChatScreen()),
+      // ?ask= pre-fills the composer, so text typed on another screen (Planning)
+      // travels with the user instead of having to be retyped.
+      GoRoute(
+        path: '/advisor',
+        builder: (_, state) => ChatScreen(initialText: state.uri.queryParameters['ask']),
+      ),
       GoRoute(path: '/timeline', builder: (_, __) => const TimelineScreen()),
       GoRoute(path: '/future-me', builder: (_, __) => const FutureMeScreen()),
       GoRoute(path: '/relationships', builder: (_, __) => const RelationshipsScreen()),

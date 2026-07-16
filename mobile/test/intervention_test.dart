@@ -34,6 +34,7 @@ void main() {
         reminderInterventionsProvider.overrideWith((ref) async => const []),
         payableInterventionsProvider.overrideWith((ref) async => const []),
         relationshipInterventionsProvider.overrideWith((ref) async => const []),
+        questionInterventionsProvider.overrideWith((ref) async => const []),
       ],
     );
     addTearDown(container.dispose);
@@ -62,6 +63,7 @@ void main() {
         reminderInterventionsProvider.overrideWith((r) async => const []),
         payableInterventionsProvider.overrideWith((r) async => const []),
         relationshipInterventionsProvider.overrideWith((r) async => const []),
+        questionInterventionsProvider.overrideWith((r) async => const []),
       ],
       child: MaterialApp(
         home: Consumer(builder: (context, r, _) {

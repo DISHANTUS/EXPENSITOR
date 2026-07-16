@@ -95,6 +95,43 @@ final reminderInterventionsProvider = FutureProvider.autoDispose<List<Interventi
   }
 });
 
+/// Advary's own check-in questions ("what changed?"). These are the one kind of
+/// intervention where the answer isn't given in the sheet — the questions live
+/// on the Planning page, so this just raises the orb and offers a ride there.
+///
+/// The id carries the question ids, so answering a question retires this
+/// intervention for good, while a genuinely NEW question later mints a new id
+/// and can raise the orb again. Keying it on a constant would silence Advary
+/// for the rest of the session the first time you tapped "Later".
+final questionInterventionsProvider = FutureProvider.autoDispose<List<Intervention>>((ref) async {
+  try {
+    final res = await ref.watch(dioProvider).get<dynamic>('/advisor/follow-ups');
+    final items = (res.data as List?) ?? const [];
+    final ids = [
+      for (final raw in items.whereType<Map>())
+        if (raw['advice_id'] != null || raw['id'] != null) (raw['advice_id'] ?? raw['id']).toString(),
+    ]..sort();
+    if (ids.isEmpty) return const [];
+
+    final n = ids.length;
+    final what = n == 1 ? 'a question' : '$n questions';
+    return [
+      Intervention(
+        id: 'questions:${ids.join('|')}',
+        trigger: InterventionTrigger.pendingQuestions,
+        priority: InterventionPriority.medium,
+        title: n == 1 ? '❓ I have a question for you' : '❓ I have $n questions for you',
+        message: "When you've got a minute, I've got $what waiting on the Planning page — "
+            "your answers are what teach me how your money actually works.",
+        actionLabel: 'Take me there',
+        actionRoute: '/budget-setup',
+      ),
+    ];
+  } on DioException {
+    return const []; // the spine never breaks a screen if the fetch fails
+  }
+});
+
 String _money(String amount, String currency) {
   final n = double.tryParse(amount) ?? 0;
   final s = n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
@@ -195,7 +232,8 @@ final pendingInterventionsProvider = Provider.autoDispose<List<Intervention>>((r
   final payables = ref.watch(payableInterventionsProvider).valueOrNull ?? const [];
   final reminders = ref.watch(reminderInterventionsProvider).valueOrNull ?? const [];
   final relationship = ref.watch(relationshipInterventionsProvider).valueOrNull ?? const [];
-  final all = [...st.manual, ...payables, ...reminders, ...relationship]
+  final questions = ref.watch(questionInterventionsProvider).valueOrNull ?? const [];
+  final all = [...st.manual, ...payables, ...reminders, ...relationship, ...questions]
       .where((i) => !st.resolved.contains(i.id)).toList()
     ..sort((a, b) => b.priority.index.compareTo(a.priority.index));
   // de-dupe by id (a manual one wins over a derived one with the same id)

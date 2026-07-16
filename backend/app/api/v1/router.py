@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     payables,
     persons,
     planned_expenses,
+    planning,
     preferences,
     reason,
     receivables,
@@ -57,6 +58,7 @@ api_router.include_router(budget.router)
 api_router.include_router(persons.router)
 api_router.include_router(recurring_rules.router)
 api_router.include_router(reason.router)
+api_router.include_router(planning.router)
 api_router.include_router(income_sources.router)
 api_router.include_router(incomes.router)
 api_router.include_router(expenses.router)

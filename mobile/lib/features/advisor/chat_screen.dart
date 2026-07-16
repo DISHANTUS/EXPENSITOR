@@ -36,7 +36,13 @@ class _Msg {
 }
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  const ChatScreen({super.key, this.initialText});
+
+  /// Text carried in from elsewhere (e.g. Planning, when what you typed turned
+  /// out not to be a purchase/subscription/goal). It's pre-filled, NOT auto-sent
+  /// — arriving on a screen to find you've already said something you can't edit
+  /// is worse than just having it waiting for you.
+  final String? initialText;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -50,6 +56,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ChatContext? _session;
   bool _sending = false;
   Timer? _replyPulseTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final seed = widget.initialText?.trim();
+    if (seed != null && seed.isNotEmpty) _input.text = seed;
+  }
 
   @override
   void dispose() {
