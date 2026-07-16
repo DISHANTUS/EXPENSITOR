@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     companion,
     currency,
     daily_plans,
+    daily_report,
     decisions,
     dev,
     expenses,
@@ -54,6 +55,7 @@ api_router.include_router(currency.router)
 api_router.include_router(categories.router)
 api_router.include_router(calendar.router)
 api_router.include_router(daily_plans.router)
+api_router.include_router(daily_report.router)
 api_router.include_router(budget.router)
 api_router.include_router(persons.router)
 api_router.include_router(recurring_rules.router)

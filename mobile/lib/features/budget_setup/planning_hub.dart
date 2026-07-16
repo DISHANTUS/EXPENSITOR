@@ -11,6 +11,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/glass.dart';
 import '../advisor/advisor_chat_repository.dart';
 import '../advisor/widgets/follow_up_card.dart';
+import '../home/daily_report_repository.dart';
 import 'budget_repository.dart';
 import 'planning_intelligence.dart';
 import 'planning_repository.dart';
@@ -843,4 +844,8 @@ void _invalidatePlan(WidgetRef ref) {
   ref.invalidate(realityProvider);
   ref.invalidate(feasibilityProvider);
   ref.invalidate(recommendationsProvider);
+  // Today's report names the goal with the nearest deadline — a goal added just
+  // now may well BE that goal, so it has to re-read rather than keep quoting
+  // the old one.
+  ref.invalidate(dailyReportProvider);
 }

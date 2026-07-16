@@ -18,6 +18,7 @@ import 'dashboard_models.dart';
 import 'dashboard_repository.dart';
 import 'home_screen.dart';
 import 'predicted_expense_repository.dart';
+import 'widgets/daily_report_card.dart';
 import 'widgets/spend_confirm_card.dart';
 
 /// Every Home open after the first one today: a quick "where do I stand"
@@ -63,6 +64,10 @@ class CompactHomeBody extends ConsumerWidget {
         SafeToSpendHero(brief: brief),
         const _WeekStrip(),
         const SizedBox(height: 10),
+        // How today went: the allowance, the run, and what it leaves for the
+        // nearest goal. Sits above the detail because it's the answer to the
+        // question people actually opened the app to ask.
+        const DailyReportCard(),
         if (today != null && today.spentToday > 0)
           GlassCard(
             margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
