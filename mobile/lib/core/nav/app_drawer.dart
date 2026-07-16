@@ -24,7 +24,7 @@ class _Dest {
 
 const _destinations = <_Dest>[
   _Dest('Home', Icons.calendar_month, '/home'),
-  _Dest('Budget Setup', Icons.account_balance_wallet_outlined, '/budget-setup'),
+  _Dest('Planning', Icons.account_balance_wallet_outlined, '/budget-setup'),
   _Dest('Your Plan', Icons.insights_outlined, '/plan'),
   _Dest('Plan Today', Icons.today_outlined, '/plan-today'),
   _Dest('Timeline', Icons.timeline, '/timeline'),

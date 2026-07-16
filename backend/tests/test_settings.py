@@ -127,6 +127,22 @@ async def test_selected_voice_round_trip_and_clear(client: AsyncClient):
     assert resp.json()["selected_voice"] is None
 
 
+async def test_profile_setup_done_flag_round_trip(client: AsyncClient):
+    """profile_setup_done gates the Planning screen (interview once, then the
+    'what are you planning?' chooser). Like free_time, it lives in the strict
+    NotificationPreferences schema, so it needs an explicit field or the PATCH
+    that carries it 422s."""
+    headers = await _auth_headers(client, email="profiledone@example.com")
+    # Defaults to false for a fresh user.
+    body = (await client.get(SETTINGS, headers=headers)).json()
+    assert body["notification_preferences"]["profile_setup_done"] is False
+
+    resp = await client.patch(SETTINGS, headers=headers,
+                              json={"notification_preferences": {"profile_setup_done": True}})
+    assert resp.status_code == 200
+    assert resp.json()["notification_preferences"]["profile_setup_done"] is True
+
+
 async def test_free_time_preferences_round_trip(client: AsyncClient):
     """Regression guard: NotificationPreferences is a strict (extra=forbid)
     schema, so a new preference key needs an explicit field or every PATCH

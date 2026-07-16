@@ -47,6 +47,11 @@ class UserSettings {
   /// (free_time_weekday, ...) — one JSONB dict on the backend, so one loosely
   /// typed map here rather than splitting into parallel fields.
   final Map<String, dynamic> notificationPreferences;
+
+  /// Whether the one-time "get to know you" basic-info interview is done.
+  /// Once true, the Planning screen opens the "what are you planning?" chooser
+  /// instead of re-asking the basics. Stored in the prefs JSONB (no migration).
+  bool get profileSetupDone => notificationPreferences['profile_setup_done'] == true;
 }
 
 /// AI's interpretation of a free-text reason (original is preserved by caller).
@@ -119,6 +124,16 @@ class SettingsRepository {
     } on DioException catch (e) {
       throw mapDioError(e);
     }
+  }
+
+  /// Flag the basic-info interview as done. Merges into the existing prefs so
+  /// no other preference (voice toggles, free-time) is lost — the backend
+  /// replaces the whole JSONB dict on PATCH, so we send the merged set.
+  Future<UserSettings> markProfileSetupComplete() async {
+    final current = await get();
+    final merged = Map<String, dynamic>.from(current.notificationPreferences)
+      ..['profile_setup_done'] = true;
+    return setNotificationPreferences(merged);
   }
 
   Future<UserSettings> setVoiceLength(String length) async {

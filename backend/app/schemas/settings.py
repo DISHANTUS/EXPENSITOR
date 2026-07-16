@@ -29,6 +29,9 @@ class NotificationPreferences(BaseModel):
     # loop) instead of interrupting mid-task — morning|afternoon|evening|night.
     free_time_weekday: str | None = None
     free_time_weekend: str | None = None
+    # Whether the one-time basic-info interview is done; once true the Planning
+    # screen opens the "what are you planning?" chooser instead of re-asking.
+    profile_setup_done: bool = False
 
 
 class UserSettingsRead(BaseModel):

@@ -10,6 +10,7 @@ import '../../core/companion/companion_scaffold.dart';
 import '../../core/settings/settings_repository.dart';
 import '../../core/widgets/otherable_chips.dart';
 import 'budget_repository.dart';
+import 'planning_hub.dart';
 
 /// Profile-Discovery Wizard (Budget Intelligence System — Phase 5C).
 ///
@@ -48,7 +49,6 @@ const _optimize = {'Maximum savings': 'max_savings', 'Balanced life': 'balanced'
 class _Draft {
   String? country, otherCountry, lifeStage, lifeStageNote, living, livingNote, food, transportMode, transportNote, optimize;
   String foodAmount = '', transportAmount = '', incomeAmount = '', lifestyleAmount = '', rentAmount = '';
-  String goalName = '', goalAmount = '';
   String? incomeSource;
   bool scholarship = false, partTime = false;
   String scholarshipAmount = '', partTimeAmount = '';
@@ -73,7 +73,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         if (_isStudent) 'partTime',
         'income', 'lifestyle',
         if (_needsRent) 'rent',
-        'goal', 'optimize', 'done',
+        // Savings goals are no longer asked here — they're set through the
+        // Planning flow ("planning to save for something?"), which gathers a
+        // proper cost/name/when and adjusts the daily allowance for it.
+        'optimize', 'done',
       ];
 
   String get _step => _steps[_i.clamp(0, _steps.length - 1)];
@@ -95,13 +98,23 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         'income' => 'Now the money. What comes in each month — this drives daily limits, buffers and goals.',
         'lifestyle' => 'Fun matters too — games, eating out, shopping. I keep room for it.',
         'rent' => 'Your monthly rent — a protected housing cost.',
-        'goal' => 'Saving toward something? Name it and a monthly amount (you can skip this).',
         'optimize' => 'Last one — how should I optimise your plan?',
         _ => 'All set — let me build your plan.',
       };
 
   @override
   Widget build(BuildContext context) {
+    // First visit gathers the basics once; every visit after opens the Planning
+    // hub ("what are you planning?") instead of re-asking them.
+    final done = ref.watch(userSettingsProvider).valueOrNull?.profileSetupDone ?? false;
+    if (done) {
+      return const CompanionScaffold(
+        title: 'Planning',
+        commentary: "What would you like to plan? Tell me and I'll fit it into your budget.",
+        mood: CompanionMood.happy,
+        child: PlanningHub(),
+      );
+    }
     return CompanionScaffold(
       title: 'Get to know you',
       commentary: _why(),
@@ -195,14 +208,6 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             (v) => _d.lifestyleAmount = v, optional: true);
       case 'rent':
         return _amount('Rent per month ($cur)', _d.rentAmount, (v) => _d.rentAmount = v, optional: true);
-      case 'goal':
-        return _pad([
-          _moneyField('Goal name (e.g. Japan fund)', _d.goalName, (v) => setState(() => _d.goalName = v), number: false),
-          const SizedBox(height: 12),
-          _moneyField('Save per month ($cur)', _d.goalAmount, (v) => setState(() => _d.goalAmount = v)),
-          const SizedBox(height: 20),
-          _nav(enabled: true, skipLabel: 'Skip'),
-        ]);
       case 'optimize':
         return _pad([
           OtherableChips(
@@ -262,9 +267,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       if (_d.partTime && double.tryParse(_d.partTimeAmount.trim()) != null) {
         await budget.createIncomeSource(label: 'Part-time job', sourceType: 'part_time', amount: _d.partTimeAmount.trim(), currency: cur);
       }
-      if (_d.goalName.trim().isNotEmpty && double.tryParse(_d.goalAmount.trim()) != null) {
-        await budget.createSavingsGoal(name: _d.goalName.trim(), amount: _d.goalAmount.trim(), currency: cur);
-      }
+      // Mark the basic-info interview done, so the next visit opens the
+      // Planning chooser ("what are you planning?") instead of re-asking.
+      await ref.read(settingsRepositoryProvider).markProfileSetupComplete();
+      ref.invalidate(userSettingsProvider);
       ref.invalidate(profileProvider);
       ref.invalidate(realityProvider);
       ref.invalidate(feasibilityProvider);
