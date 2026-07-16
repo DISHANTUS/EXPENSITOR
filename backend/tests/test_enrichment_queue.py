@@ -255,6 +255,33 @@ async def test_the_developer_summary_is_counts_only(client: AsyncClient):
     assert "private@example.com" not in blob
 
 
+async def test_the_summary_says_whether_this_deployment_can_mail(client: AsyncClient, monkeypatch):
+    """"Did my env vars take?" must be answerable at a glance. Otherwise the
+    only way to find out is to wait a day for a mail that may never come."""
+    dev = await _dev_auth(client)
+
+    body = (await client.get(DEV, headers=dev)).json()
+    assert body["mail_configured"] is False  # nothing configured in tests
+
+    monkeypatch.setattr(mail_service, "configured", lambda: True)
+    body = (await client.get(DEV, headers=dev)).json()
+    assert body["mail_configured"] is True
+
+
+async def test_the_summary_reports_mail_status_without_leaking_the_credentials(client, monkeypatch):
+    # A bool, never the settings themselves. A developer screen that echoes the
+    # host's secrets back out is a worse problem than the one it solves.
+    monkeypatch.setattr(mail_service, "configured", lambda: True)
+    monkeypatch.setattr(mail_service.app_settings, "SMTP_PASSWORD", "supersecretapppassword")
+    monkeypatch.setattr(mail_service.app_settings, "SMTP_USERNAME", "sender@example.com")
+
+    dev = await _dev_auth(client)
+    blob = str((await client.get(DEV, headers=dev)).json()).lower()
+    assert "supersecret" not in blob
+    assert "sender@example.com" not in blob
+    assert "smtp" not in blob
+
+
 async def test_the_queue_is_developer_only(client: AsyncClient):
     normal = await _auth(client, "notadev@example.com")
     assert (await client.get(DEV, headers=normal)).status_code == 403

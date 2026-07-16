@@ -34,7 +34,7 @@ from app.models.enrichment_job import (
     STATUS_SKIPPED,
     EnrichmentJob,
 )
-from app.services import ollama_service
+from app.services import mail_service, ollama_service
 
 # A job that keeps failing is a job that will keep failing. Stop rather than
 # grind the same broken payload every time the model comes up.
@@ -92,6 +92,11 @@ async def summary(db: AsyncSession) -> dict[str, Any]:
         "skipped": by_status.get(STATUS_SKIPPED, 0),
         "oldest_pending_at": oldest.isoformat() if oldest else None,
         "model_available": model_available(),
+        # Whether THIS deployment can send the backlog digest. A bool, never the
+        # settings themselves — otherwise "did my env vars take?" is unanswerable
+        # without reading the host's secrets back out, which is exactly what a
+        # developer screen must never do.
+        "mail_configured": mail_service.configured(),
     }
 
 

@@ -15,6 +15,7 @@ class EnrichmentSummary {
     required this.failed,
     required this.skipped,
     required this.modelAvailable,
+    this.mailConfigured = false,
     this.oldestPendingAt,
   });
 
@@ -24,6 +25,7 @@ class EnrichmentSummary {
         failed: (j['failed'] as num?)?.toInt() ?? 0,
         skipped: (j['skipped'] as num?)?.toInt() ?? 0,
         modelAvailable: j['model_available'] == true,
+        mailConfigured: j['mail_configured'] == true,
         oldestPendingAt: j['oldest_pending_at'] as String?,
       );
 
@@ -32,6 +34,12 @@ class EnrichmentSummary {
   final int failed;
   final int skipped;
   final bool modelAvailable;
+
+  /// Whether this deployment can actually send the backlog digest. Shown so
+  /// "did my Render env vars take?" is answerable at a glance instead of by
+  /// waiting a day for a mail that may never come.
+  final bool mailConfigured;
+
   final String? oldestPendingAt;
 }
 
@@ -136,6 +144,23 @@ class _EnrichmentQueueTileState extends ConsumerState<EnrichmentQueueTile> {
               tooltip: 'Refresh',
             ),
           ),
+          if (summary != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Row(children: [
+                Icon(summary.mailConfigured ? Icons.mark_email_read_outlined : Icons.unsubscribe_outlined,
+                    size: 14, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    summary.mailConfigured
+                        ? 'Backlog digest: on (max one mail a day, a count only)'
+                        : 'Backlog digest: off — set SMTP_* in the host env to enable',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ]),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: SizedBox(

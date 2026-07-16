@@ -48,11 +48,18 @@ async def _ensure_test_database() -> None:
 
 
 @pytest_asyncio.fixture(autouse=True)
-def _ollama_off(monkeypatch):
+def _external_services_off(monkeypatch):
     """Tests are deterministic regardless of the local .env: never call a live
-    Ollama. Narration tests inject a stub `generate` to exercise that path."""
+    Ollama, and never send real mail.
+
+    Both matter for the same reason — a developer who happens to have SMTP or a
+    model configured must not get different results from one who doesn't, and a
+    test run must never put a message in someone's actual inbox. Tests that want
+    these paths inject a stub (`generate`) or monkeypatch `configured`/`send`."""
     from app.core.config import settings as _s
     monkeypatch.setattr(_s, "OLLAMA_ENABLED", False)
+    for key in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM"):
+        monkeypatch.setattr(_s, key, "")
 
 
 @pytest_asyncio.fixture

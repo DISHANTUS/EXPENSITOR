@@ -101,6 +101,7 @@ class EnrichmentSummaryOut(BaseModel):
     skipped: int
     oldest_pending_at: str | None = None
     model_available: bool
+    mail_configured: bool = False
 
 
 class DrainOut(BaseModel):
