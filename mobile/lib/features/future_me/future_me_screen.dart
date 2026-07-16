@@ -93,8 +93,8 @@ class _PathCard extends StatelessWidget {
               begin: Alignment.topLeft, end: Alignment.bottomRight),
           AppColors.secondary, AppColors.secondary.withValues(alpha: 0.45)),
       'conservative' => (
-          LinearGradient(colors: [Colors.white.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.03)]),
-          Colors.transparent, Colors.white.withValues(alpha: 0.12)),
+          LinearGradient(colors: [AppColors.hairline(0.06), AppColors.hairline(0.03)]),
+          Colors.transparent, AppColors.hairline(0.12)),
       _ => (
           LinearGradient(colors: [AppColors.primary.withValues(alpha: 0.38), AppColors.secondary.withValues(alpha: 0.18)],
               begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -161,7 +161,7 @@ class _MilestoneRail extends StatelessWidget {
                   colors: [color.withValues(alpha: 0.26), AppColors.primary.withValues(alpha: 0.10)],
                   begin: Alignment.topLeft, end: Alignment.bottomRight)
               : null,
-          color: highlight ? null : Colors.white.withValues(alpha: 0.05),
+          color: highlight ? null : AppColors.hairline(0.05),
           border: Border.all(color: color.withValues(alpha: highlight ? 0.45 : 0.14)),
           boxShadow: highlight
               ? [BoxShadow(color: color.withValues(alpha: 0.22), blurRadius: 18, offset: const Offset(0, 6))]

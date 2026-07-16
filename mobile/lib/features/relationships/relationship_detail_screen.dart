@@ -87,7 +87,8 @@ class _Hero extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(r.name.isNotEmpty ? r.name[0].toUpperCase() : '❤️',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                style: TextStyle(
+                    fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.active.onPrimaryOverride ?? Colors.white)),
           ),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -115,7 +116,7 @@ class _TrustCard extends StatelessWidget {
           width: 52, height: 52,
           child: Stack(alignment: Alignment.center, children: [
             CircularProgressIndicator(value: pct, strokeWidth: 5,
-                backgroundColor: Colors.white.withValues(alpha: 0.1), color: AppColors.secondary),
+                backgroundColor: AppColors.hairline(0.1), color: AppColors.secondary),
             const Text('🤝', style: TextStyle(fontSize: 18)),
           ]),
         ),
@@ -158,8 +159,8 @@ class _RailLine extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withValues(alpha: e.isFuture ? 0.03 : 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: e.isFuture ? 0.12 : 0.08)),
+        color: AppColors.hairline(e.isFuture ? 0.03 : 0.05),
+        border: Border.all(color: AppColors.hairline(e.isFuture ? 0.12 : 0.08)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

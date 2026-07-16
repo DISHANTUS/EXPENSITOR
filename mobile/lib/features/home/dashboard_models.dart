@@ -59,6 +59,31 @@ class ProactiveFeed {
   }
 }
 
+class SpentCategory {
+  const SpentCategory({required this.label, required this.amount});
+  factory SpentCategory.fromJson(Map<String, dynamic> j) =>
+      SpentCategory(label: _s(j['label']) ?? '', amount: (j['amount'] as num?)?.toDouble() ?? 0);
+  final String label;
+  final double amount;
+}
+
+/// Actual today-spend, by category — distinct from [DailyBrief.dailyRemaining],
+/// which is a forward-looking allowance, not a sum of what's already spent.
+class TodaySnapshot {
+  const TodaySnapshot({required this.currency, required this.spentToday, this.byCategory = const []});
+  factory TodaySnapshot.fromJson(Map<String, dynamic> j) => TodaySnapshot(
+        currency: _s(j['currency']) ?? 'INR',
+        spentToday: (j['spent_today'] as num?)?.toDouble() ?? 0,
+        byCategory: ((j['spent_today_by_category'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => SpentCategory.fromJson(e.cast<String, dynamic>()))
+            .toList(),
+      );
+  final String currency;
+  final double spentToday;
+  final List<SpentCategory> byCategory;
+}
+
 class DailyBrief {
   const DailyBrief({
     required this.currency,
@@ -68,12 +93,14 @@ class DailyBrief {
     this.headline,
     this.paragraphs = const [],
     this.severity,
+    this.today,
   });
 
   factory DailyBrief.fromJson(Map<String, dynamic> j) {
     final ctx = (j['context'] as Map?)?.cast<String, dynamic>() ?? const {};
     final det = ((j['commentary'] as Map?)?['deterministic_commentary'] as Map?)?.cast<String, dynamic>();
     final paras = (det?['paragraphs'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final snap = (j['today_snapshot'] as Map?)?.cast<String, dynamic>();
     return DailyBrief(
       currency: _s(ctx['currency']) ?? 'INR',
       dailyRemaining: _s(ctx['daily_remaining']),
@@ -82,6 +109,7 @@ class DailyBrief {
       headline: _s(det?['headline']),
       paragraphs: paras,
       severity: _s(det?['severity']),
+      today: snap == null ? null : TodaySnapshot.fromJson(snap),
     );
   }
 
@@ -92,6 +120,7 @@ class DailyBrief {
   final String? headline;
   final List<String> paragraphs;
   final String? severity;
+  final TodaySnapshot? today;
 }
 
 class PillarSummary {

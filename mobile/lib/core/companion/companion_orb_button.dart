@@ -7,6 +7,7 @@ import '../analytics/analytics.dart';
 import '../facts/fact_sheet.dart';
 import '../intervention/intervention_controller.dart';
 import '../intervention/intervention_sheet.dart';
+import '../theme/app_theme.dart';
 import 'companion_orb.dart';
 import 'mood_models.dart';
 
@@ -179,7 +180,7 @@ class _AttentionRingState extends State<_AttentionRing> with SingleTickerProvide
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: widget.color,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+                border: Border.all(color: AppColors.hairline(0.85), width: 1.5),
               ),
             ),
           ),

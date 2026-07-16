@@ -168,7 +168,7 @@ class _ProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Stack(
         children: [
-          Container(height: 10, color: Colors.white.withValues(alpha: 0.08)),
+          Container(height: 10, color: AppColors.hairline(0.08)),
           FractionallySizedBox(
             widthFactor: value.clamp(0.02, 1.0),
             child: Container(
@@ -202,7 +202,7 @@ class _MilestoneRow extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: Colors.white.withValues(alpha: 0.05),
+          color: AppColors.hairline(0.05),
           border: Border.all(color: color.withValues(alpha: 0.18)),
         ),
         child: Row(

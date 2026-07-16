@@ -25,6 +25,10 @@ class NotificationPreferences(BaseModel):
     speak_reminders: bool = False
     speak_celebrations: bool = True
     voice_when_tapped_only: bool = False
+    # When to time deferred spending-shift "what changed?" nudges (learning
+    # loop) instead of interrupting mid-task — morning|afternoon|evening|night.
+    free_time_weekday: str | None = None
+    free_time_weekend: str | None = None
 
 
 class UserSettingsRead(BaseModel):

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 import '../companion/companion_orb.dart';
+import '../home/day_state.dart';
 import '../settings/settings_repository.dart';
 import '../theme/app_theme.dart';
 
@@ -84,7 +85,7 @@ class AppDrawer extends ConsumerWidget {
                 ],
               ),
             ),
-            Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+            Divider(height: 1, color: AppColors.hairline(0.08)),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -96,6 +97,11 @@ class AppDrawer extends ConsumerWidget {
                       selected: current == d.route,
                       onTap: () {
                         Navigator.of(context).pop();
+                        // Home's drawer entry is always "show me the calendar" —
+                        // even mid-compact-view, even if already on /home.
+                        if (d.route == '/home') {
+                          ref.read(homeDayStateProvider.notifier).forceFull();
+                        }
                         if (current != d.route) context.go(d.route);
                       },
                     ),

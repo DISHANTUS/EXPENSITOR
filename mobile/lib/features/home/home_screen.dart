@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -11,10 +12,16 @@ import '../../core/companion/companion_scaffold.dart';
 import '../../core/companion/greeting.dart';
 import '../../core/companion/home_stats_repository.dart';
 import '../../core/format/dates.dart';
+import '../../core/format/money.dart';
+import '../../core/home/day_state.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/glass.dart';
+import '../../core/theme/vitality.dart';
 import '../calendar/calendar_models.dart';
 import '../calendar/calendar_repository.dart';
 import 'add_event_sheet.dart';
+import 'compact_home_body.dart';
+import 'dashboard_models.dart';
 import 'dashboard_repository.dart';
 import 'did_you_know_card.dart';
 
@@ -42,23 +49,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final brief = ref.watch(dailyBriefProvider);
-    final month = ref.watch(monthViewProvider((year: _focused.year, month: _focused.month)));
-    final registry = ref.watch(markerRegistryProvider).valueOrNull ?? fallbackMarkers;
-    final monthData = month.valueOrNull;
     // Advary's contextual thought now lives INSIDE the one companion bubble (no
     // second orb) — and gives the single orb its mood (concerned on budget pressure).
     final thoughtAsync = ref.watch(homeThoughtProvider);
     final thought = thoughtAsync.valueOrNull;
-    // "Did You Know" appears only when Advary has nothing user-specific to say —
-    // so a fact never duplicates the orb's thought. While loading we wait; offline
-    // we still offer a fact (facts are local/offline-first).
-    final showFact = switch (thoughtAsync) {
-      AsyncData(:final value) => value.lines.isEmpty,
-      AsyncError() => true,
-      _ => false,
-    };
+    final viewMode = ref.watch(homeDayStateProvider);
 
     return CompanionScaffold(
       title: 'Home',
@@ -77,13 +73,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
           onPressed: () => showAddEventSheet(context),
         ),
       ],
-      child: ListView(
+      child: viewMode == HomeViewMode.compact
+          ? CompactHomeBody(brief: brief.valueOrNull)
+          : _themeWrap(_fullBody(context, brief)),
+    );
+  }
+
+  /// First open of the day (or a manual "view calendar" request from the
+  /// drawer): the full planning view, calendar and all — this is the
+  /// screen's original body, unchanged.
+  Widget _fullBody(BuildContext context, AsyncValue<DailyBrief> brief) {
+    final cs = Theme.of(context).colorScheme;
+    final month = ref.watch(monthViewProvider((year: _focused.year, month: _focused.month)));
+    final registry = ref.watch(markerRegistryProvider).valueOrNull ?? fallbackMarkers;
+    final monthData = month.valueOrNull;
+    final thoughtAsync = ref.watch(homeThoughtProvider);
+    // "Did You Know" appears only when Advary has nothing user-specific to say —
+    // so a fact never duplicates the orb's thought. While loading we wait; offline
+    // we still offer a fact (facts are local/offline-first).
+    final showFact = switch (thoughtAsync) {
+      AsyncData(:final value) => value.lines.isEmpty,
+      AsyncError() => true,
+      _ => false,
+    };
+
+    return ListView(
         children: [
-          const _QuickActions(),
+          SafeToSpendHero(brief: brief.valueOrNull),
+          const _QuickActions().animate(delay: 60.ms).fadeIn(duration: 380.ms).slideY(begin: 0.06, end: 0),
           // Calendar sits directly under the Quick Actions grid — the most
           // interactive, life-tied element gets the premium Home position.
-          // Faint crimson-tinted glass so the calendar reads as part of the
-          // Crimson Moon theme, not a black widget dropped onto the page.
+          // Faint primary-tinted wash toward the palette's own elevated
+          // surface tone (not a literal black) — reads as moody glass on the
+          // 4 dark packs (glass style, blurred) and stays legible on light
+          // panel-style packs (opaque fill, no blur to hide a black tint in).
           GlassCard(
             margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             padding: const EdgeInsets.all(4),
@@ -92,7 +115,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
               end: Alignment.bottomRight,
               colors: [
                 cs.primary.withValues(alpha: 0.12),
-                Colors.black.withValues(alpha: 0.20),
+                AppColors.active.surfaceHi.withValues(alpha: 0.20),
                 cs.primary.withValues(alpha: 0.10),
               ],
             ),
@@ -172,14 +195,126 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
             const Padding(padding: EdgeInsets.all(8), child: Center(child: Text('Loading month…'))),
           const _Legend(),
           // Previews of your story, future and people (below the calendar).
-          const _LivingCards(),
+          const _LivingCards().animate(delay: 120.ms).fadeIn(duration: 380.ms).slideY(begin: 0.06, end: 0),
           // Facts live in ONE place — only when the orb has nothing personal to
           // say (never duplicated with Advary's own thought).
           if (showFact) const DidYouKnowCard(),
           const SizedBox(height: 12),
         ],
-      ),
     );
+  }
+
+  /// Theme-specific decorative overlays, layered on top of the standard body
+  /// without touching its layout/data. Comic gets a halftone-dot texture over
+  /// everything (its whole surface language already switches via GlassCard/
+  /// AuroraBackground once Comic is selected — this is the one extra touch);
+  /// Terminal/Ledger/Nihon get a small positioned motif. Every other theme
+  /// (12 of 15) is unchanged here — they're already fully re-skinned by
+  /// Phases 0-2 through colour/typography/background/surface/motion alone.
+  Widget _themeWrap(Widget body) {
+    final id = AppColors.active.id;
+    if (id == 'comic') return HalftoneDots(opacity: 0.05, child: body);
+    if (id == 'terminal' || id == 'ledger' || id == 'nihon') {
+      return Stack(children: [body, Positioned.fill(child: IgnorePointer(child: _ThemeDecorations(id: id)))]);
+    }
+    return body;
+  }
+}
+
+/// The three themes deep enough to have a bespoke motif today (more can be
+/// added the same way, theme by theme, without touching the standard body).
+class _ThemeDecorations extends StatelessWidget {
+  const _ThemeDecorations({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppColors.active;
+    return switch (id) {
+      'terminal' => Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            height: 22,
+            color: p.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.centerLeft,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('> ', style: TextStyle(color: p.primary, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w700)),
+              const BlinkingCursor(width: 6, height: 12),
+            ]),
+          ),
+        ),
+      'ledger' => Positioned(
+          top: 96, right: 18,
+          child: IdleWobble(
+            amplitudeDeg: 2,
+            child: Transform.rotate(
+              angle: -0.12,
+              child: Container(
+                width: 64, height: 30,
+                decoration: BoxDecoration(border: Border.all(color: p.secondary, width: 2.5), borderRadius: BorderRadius.circular(3)),
+                alignment: Alignment.center,
+                child: Text('BAL\'D', style: TextStyle(color: p.secondary, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+              ),
+            ),
+          ),
+        ),
+      'nihon' => Positioned(
+          left: 4, top: 130, bottom: 130,
+          // A vertical margin strip, in the spirit of the prototype's kanji
+          // column — rotated so the short label reads top-to-bottom.
+          child: RotatedBox(
+            quarterTurns: 1,
+            child: Text('家計簿・貯蓄',
+                style: TextStyle(color: p.muted, fontSize: 11, letterSpacing: 6, height: 1.4),
+                textAlign: TextAlign.center),
+          ),
+        ),
+      _ => const SizedBox.shrink(),
+    };
+  }
+}
+
+/// "Safe to spend today" — new for the 15-theme rollout; nothing like this
+/// existed anywhere in the app before. Counts up from zero on first paint via
+/// [CountUpText] (the same `TweenAnimationBuilder<double>` idiom `_ElevatedDate`
+/// already uses for its scale-pop) and picks a gradient number for themes that
+/// want one (Aero, Velocity); every other theme reads the number in its own
+/// display font/colour automatically.
+class SafeToSpendHero extends StatelessWidget {
+  const SafeToSpendHero({super.key, required this.brief});
+  final DailyBrief? brief;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = brief?.dailyRemaining;
+    final value = raw == null ? null : double.tryParse(raw);
+    if (value == null) return const SizedBox.shrink();
+    final p = AppColors.active;
+    final currency = brief!.currency;
+    final numberStyle = TextStyle(
+      fontSize: 42, fontWeight: FontWeight.w800, color: p.on, height: 1.0,
+      fontFamily: switch (p.displayFont) { DisplayFont.serif => 'serif', DisplayFont.mono => 'monospace', DisplayFont.defaultSans => null },
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SAFE TO SPEND TODAY',
+              style: TextStyle(color: p.muted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0)),
+          const SizedBox(height: 6),
+          p.id == 'aero' || p.id == 'velocity'
+              ? GradientText(formatMoneyValue(value, currency), style: numberStyle,
+                  gradient: LinearGradient(colors: [p.primary, p.secondary]))
+              : CountUpText(
+                  value: value,
+                  style: numberStyle,
+                  formatter: (v) => formatMoneyValue(v, currency),
+                ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 340.ms).slideY(begin: 0.06, end: 0);
   }
 }
 
@@ -217,14 +352,15 @@ class _QuickActions extends StatelessWidget {
             GlassCard(
               padding: const EdgeInsets.all(6),
               onTap: () => context.go(route),
-              // Crimson-tinted glass over deep black so the glowing icon pops —
-              // matches the rest of the Home palette (Crimson Moon).
+              // Primary-tinted wash toward the palette's own elevated surface
+              // tone so the glowing icon pops on dark packs (glass, blurred)
+              // without going muddy-dark on light panel-style packs.
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
                   cs.primary.withValues(alpha: 0.16),
-                  Colors.black.withValues(alpha: 0.30),
+                  AppColors.active.surfaceHi.withValues(alpha: 0.30),
                 ],
               ),
               borderColor: cs.primary.withValues(alpha: 0.24),
@@ -704,7 +840,7 @@ class _BreathingTodayState extends State<_BreathingToday> with SingleTickerProvi
           );
         },
         child: Text('${widget.day.day}',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+            style: TextStyle(color: AppColors.on, fontWeight: FontWeight.w700, fontSize: 13)),
       ),
     );
   }
@@ -774,7 +910,7 @@ class _ElevatedDate extends StatelessWidget {
               shape: BoxShape.circle,
               color: color.withValues(alpha: 0.22),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 10, offset: const Offset(0, 4)),
+                BoxShadow(color: AppColors.scrim(0.45), blurRadius: 10, offset: const Offset(0, 4)),
                 BoxShadow(color: color.withValues(alpha: 0.40), blurRadius: 12, spreadRadius: 0.5),
               ],
             ),
@@ -782,7 +918,7 @@ class _ElevatedDate extends StatelessWidget {
           ),
         ),
         child: Text('${day.day}',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+            style: TextStyle(color: AppColors.on, fontWeight: FontWeight.w700, fontSize: 14)),
       ),
     );
   }
@@ -854,7 +990,7 @@ class _DateReactionSheet extends ConsumerWidget {
                   label: const Text('Open this day'),
                   style: FilledButton.styleFrom(
                       foregroundColor: cs.onSurface,
-                      backgroundColor: Colors.white.withValues(alpha: 0.08)),
+                      backgroundColor: AppColors.hairline(0.08)),
                 ),
               ),
             ],

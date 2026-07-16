@@ -3,10 +3,9 @@
 /// currency code for unknown currencies.
 const _symbols = {'INR': '₹', 'USD': '\$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CZK': 'Kč'};
 
-String formatMoney(String? raw, String currency) {
-  if (raw == null || raw.isEmpty) return '—';
-  final value = double.tryParse(raw);
-  if (value == null) return raw;
+String currencySymbol(String currency) => _symbols[currency.toUpperCase()] ?? '${currency.toUpperCase()} ';
+
+String formatMoneyValue(double value, String currency) {
   final rounded = value.round();
   final digits = rounded.abs().toString();
   final grouped = StringBuffer();
@@ -17,4 +16,11 @@ String formatMoney(String? raw, String currency) {
   final body = '${rounded < 0 ? '-' : ''}$grouped';
   final sym = _symbols[currency.toUpperCase()];
   return sym != null ? '$sym$body' : '${currency.toUpperCase()} $body';
+}
+
+String formatMoney(String? raw, String currency) {
+  if (raw == null || raw.isEmpty) return '—';
+  final value = double.tryParse(raw);
+  if (value == null) return raw;
+  return formatMoneyValue(value, currency);
 }

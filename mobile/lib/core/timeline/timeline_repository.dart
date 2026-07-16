@@ -3,20 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../cache/offline_cache.dart';
 import 'timeline_models.dart';
 
 class TimelineRepository {
-  TimelineRepository(this._dio);
+  TimelineRepository(this._dio, this._cache);
   final Dio _dio;
+  final OfflineCache _cache;
 
-  Future<Timeline> getTimeline() async {
-    try {
-      final res = await _dio.get<dynamic>('/timeline');
-      return Timeline.fromJson((res.data as Map).cast<String, dynamic>());
-    } on DioException catch (e) {
-      throw mapDioError(e);
-    }
-  }
+  Future<Timeline> getTimeline() async =>
+      Timeline.fromJson(await _cache.fetchJson(_dio, '/timeline'));
 
   /// Add a user life event (a non-finance milestone) to the timeline.
   Future<void> addLifeEvent({required String title, required String date, String kind = 'milestone', String? icon}) async {
@@ -40,8 +36,8 @@ class TimelineRepository {
   }
 }
 
-final timelineRepositoryProvider =
-    Provider<TimelineRepository>((ref) => TimelineRepository(ref.watch(dioProvider)));
+final timelineRepositoryProvider = Provider<TimelineRepository>(
+    (ref) => TimelineRepository(ref.watch(dioProvider), ref.watch(offlineCacheProvider)));
 
 /// The user's life timeline. Auto-disposes; the screen refreshes it on entry.
 final timelineProvider =

@@ -20,22 +20,25 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings as app_settings
+from app.intelligence.companion import reason_judge
 from app.intelligence.learning import accuracy as acc
 from app.intelligence.learning import importance as imp
 from app.intelligence.outcomes.types import classify_circumstance
 from app.models import AdviceMemory, Outcome
 from app.models.enums import AdviceStatus
 from app.schemas.outcome import OutcomeReportIn
-from app.services import life_lesson_service, outcome_service, projection_service, settings_service
+from app.services import life_lesson_service, ollama_service, outcome_service, projection_service, settings_service
 
 _DEDUP_WINDOW_DAYS = 30
-_ANSWER_TO_OUTCOME = {"yes": "success", "partial": "partial", "no": "failed"}
+_ANSWER_TO_OUTCOME = {"yes": "success", "partial": "partial", "no": "failed", "explained": "unknown"}
 # advice kind -> (Outcome kind, default subject_type)
 _KIND_TO_OUTCOME = {
     "forecast": ("goal", "savings_goal"),
     "recommendation": ("recommendation", "recommendation_lever"),
     "relationship": ("decision", "relationship"),
     "budget": ("plan", "budget"),
+    "spending_shift": ("decision", "category"),
 }
 
 _FOLLOWUP_TEMPLATES = {
@@ -44,8 +47,13 @@ _FOLLOWUP_TEMPLATES = {
     "relationship": "Last time we talked about {subject}'s repayment. What happened?",
     "budget": "How did your budget for {subject} go?",
     "commitment": "You planned to repay {subject}. Did that happen?",
+    "spending_shift": "{claim}. What's changed?",
 }
 _OPTIONS = [("Yes", "yes"), ("Partially", "partial"), ("No", "no")]
+# Kinds that need a free-text explanation instead of the Yes/Partially/No chips.
+_RESPONSE_TYPES = {"spending_shift": "free_text"}
+# A free-text reason judged too thin gets ONE gentler re-ask, not an endless loop.
+_MAX_INSUFFICIENT_RETRIES = 1
 
 
 def _now() -> datetime:
@@ -130,6 +138,7 @@ def _to_question_dict(row: AdviceMemory) -> dict[str, Any]:
         "id": str(row.id), "kind": row.kind, "importance": row.importance,
         "subject_label": row.subject_label, "claim": row.claim,
         "question": _question(row),
+        "response_type": _RESPONSE_TYPES.get(row.kind, "choice"),
         "options": [{"label": lbl, "value": val} for lbl, val in _OPTIONS],
     }
 
@@ -175,6 +184,24 @@ async def answer(db: AsyncSession, user_id: uuid.UUID, advice_id: uuid.UUID, *,
         raise ResourceNotFoundError("Advice")
 
     ans = answer.lower().strip()
+
+    # free_text kinds (spending_shift): judge whether the reason actually
+    # explains anything before closing the loop — a thin answer gets ONE
+    # gentler re-ask rather than being accepted or rejected outright.
+    if _RESPONSE_TYPES.get(row.kind) == "free_text" and row.follow_up_count < _MAX_INSUFFICIENT_RETRIES:
+        generate = ollama_service.complete if app_settings.OLLAMA_ENABLED else None
+        sufficient = await reason_judge.judge_sufficiency(detail, category=row.subject_label, generate=generate)
+        if not sufficient:
+            row.follow_up_count += 1
+            row.follow_up_due = today
+            await db.commit()
+            await db.refresh(row)
+            return {
+                "acknowledged": "Could you say a little more about what changed? Even a short reason helps.",
+                "needs_more_detail": True, "advice_id": str(row.id), "outcome_id": None,
+                "circumstance": None, "lesson_suggestion": None, "lesson": None,
+            }
+
     outcome_status = _ANSWER_TO_OUTCOME.get(ans, "unknown")
     circumstance = classify_circumstance(detail)
     out_kind, out_subject = _KIND_TO_OUTCOME.get(row.kind, ("decision", row.subject_type))
@@ -220,6 +247,8 @@ def _acknowledge(row: AdviceMemory, ans: str, circumstance: str | None) -> str:
     if circumstance:
         return (f"Thanks for telling me — that sounds like a one-off ({circumstance.replace('_', ' ')}), "
                 f"so I won’t count it against the plan.")
+    if ans == "explained":
+        return f"Thanks for explaining — I’ll keep that in mind for {subject}."
     if ans == "yes":
         return f"Great — I’ll remember that worked for {subject}."
     if ans == "partial":

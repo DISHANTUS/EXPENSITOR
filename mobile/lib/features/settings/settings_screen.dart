@@ -21,6 +21,56 @@ import '../home/dashboard_repository.dart';
 
 const _companionStyles = ['balanced', 'cheerful', 'professional', 'anime', 'minimal'];
 const _voiceLengths = ['short', 'normal', 'detailed'];
+const _motionLabels = {
+  MotionIntensity.off: 'Off',
+  MotionIntensity.minimal: 'Minimal',
+  MotionIntensity.normal: 'Normal',
+  MotionIntensity.dynamic: 'Dynamic',
+};
+
+Future<void> changeMotionIntensity(BuildContext context, WidgetRef ref, MotionIntensity current) async {
+  final picked = await showDialog<MotionIntensity>(
+    context: context,
+    builder: (c) => SimpleDialog(
+      title: const Text('Motion'),
+      children: [
+        for (final v in MotionIntensity.values)
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, v), child: Text(_motionLabels[v]!)),
+      ],
+    ),
+  );
+  if (picked == null) return;
+  await ref.read(motionIntensityProvider.notifier).select(picked);
+}
+
+const _freeTimeLabels = {'morning': 'Morning', 'afternoon': 'Afternoon', 'evening': 'Evening', 'night': 'Night'};
+
+/// When the user is usually free — weekday and weekend kept separate since
+/// they're often different. Used to time deferred "what changed?" prompts
+/// (spending-shift check-ins) instead of interrupting mid-task; see
+/// local_notification_service.dart.
+Future<void> changeFreeTime(
+  BuildContext context, WidgetRef ref, {required String prefKey, required String title, required Map<String, dynamic> currentPrefs,
+}) async {
+  final picked = await showDialog<String>(
+    context: context,
+    builder: (c) => SimpleDialog(
+      title: Text(title),
+      children: [
+        for (final e in _freeTimeLabels.entries)
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, e.key), child: Text(e.value)),
+      ],
+    ),
+  );
+  if (picked == null) return;
+  final next = Map<String, dynamic>.from(currentPrefs)..[prefKey] = picked;
+  try {
+    await ref.read(settingsRepositoryProvider).setNotificationPreferences(next);
+    ref.invalidate(userSettingsProvider);
+  } on AppError catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
 
 Future<void> changeVoiceLength(BuildContext context, WidgetRef ref) async {
   final picked = await showDialog<String>(
@@ -221,7 +271,7 @@ Future<void> changePreferredCurrency(BuildContext context, WidgetRef ref) async 
 /// ready for Sprint 5 TTS; these settings decide what gets read aloud.
 class _VoiceToggles extends ConsumerWidget {
   const _VoiceToggles({required this.prefs});
-  final Map<String, bool> prefs;
+  final Map<String, dynamic> prefs;
 
   static const _items = [
     ('speak_greeting_on_open', 'Read greeting on app open'),
@@ -231,7 +281,7 @@ class _VoiceToggles extends ConsumerWidget {
   ];
 
   Future<void> _toggle(BuildContext context, WidgetRef ref, String key, bool value) async {
-    final next = Map<String, bool>.from(prefs)..[key] = value;
+    final next = Map<String, dynamic>.from(prefs)..[key] = value;
     try {
       await ref.read(settingsRepositoryProvider).setNotificationPreferences(next);
       ref.invalidate(userSettingsProvider);
@@ -248,7 +298,7 @@ class _VoiceToggles extends ConsumerWidget {
           for (final (key, label) in _items)
             SwitchListTile(
               title: Text(label),
-              value: prefs[key] ?? false,
+              value: prefs[key] == true,
               onChanged: (v) => _toggle(context, ref, key, v),
             ),
         ],
@@ -386,11 +436,46 @@ class SettingsScreen extends ConsumerWidget {
             child: ListTile(
               leading: const Icon(Icons.palette_outlined),
               title: const Text('Appearance'),
-              subtitle: const Text('Theme packs — Crimson Moon, Aurora, Midnight, Sakura'),
+              subtitle: const Text('19 theme packs — from Crimson Moon to Comic and Terminal'),
               trailing: Text(ref.watch(themeProvider).name, style: Theme.of(context).textTheme.bodySmall),
               onTap: () => context.go('/appearance'),
             ),
           ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.motion_photos_auto_outlined),
+              title: const Text('Motion'),
+              subtitle: const Text('How much ambient movement the app uses'),
+              trailing: Text(_motionLabels[ref.watch(motionIntensityProvider)]!,
+                  style: Theme.of(context).textTheme.bodySmall),
+              onTap: () => changeMotionIntensity(context, ref, ref.read(motionIntensityProvider)),
+            ),
+          ),
+          Builder(builder: (context) {
+            final prefs = ref.watch(userSettingsProvider).valueOrNull?.notificationPreferences ?? const {};
+            final weekday = _freeTimeLabels[prefs['free_time_weekday']] ?? 'Not set';
+            final weekend = _freeTimeLabels[prefs['free_time_weekend']] ?? 'Not set';
+            return Card(
+              child: Column(children: [
+                ListTile(
+                  leading: const Icon(Icons.free_breakfast_outlined),
+                  title: const Text('Free time — weekdays'),
+                  subtitle: const Text('When to ask about a spending change, instead of interrupting you'),
+                  trailing: Text(weekday, style: Theme.of(context).textTheme.bodySmall),
+                  onTap: () => changeFreeTime(context, ref,
+                      prefKey: 'free_time_weekday', title: 'Usually free on weekdays…', currentPrefs: prefs),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.weekend_outlined),
+                  title: const Text('Free time — weekends'),
+                  trailing: Text(weekend, style: Theme.of(context).textTheme.bodySmall),
+                  onTap: () => changeFreeTime(context, ref,
+                      prefKey: 'free_time_weekend', title: 'Usually free on weekends…', currentPrefs: prefs),
+                ),
+              ]),
+            );
+          }),
           Card(
             child: ListTile(
               leading: const Icon(Icons.badge_outlined),

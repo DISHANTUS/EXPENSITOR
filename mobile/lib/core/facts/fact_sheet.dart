@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../companion/companion_orb.dart';
+import '../theme/app_theme.dart';
 import '../theme/glass.dart';
 import 'facts_models.dart';
 import 'facts_prefs.dart';
@@ -101,7 +102,7 @@ class _FactSheetState extends ConsumerState<_FactSheet> {
                     icon: const Icon(Icons.casino_outlined, size: 18),
                     label: const Text('Tell me another'),
                     style: FilledButton.styleFrom(
-                        foregroundColor: cs.onSurface, backgroundColor: Colors.white.withValues(alpha: 0.08)),
+                        foregroundColor: cs.onSurface, backgroundColor: AppColors.hairline(0.08)),
                   ),
                 ],
               ),

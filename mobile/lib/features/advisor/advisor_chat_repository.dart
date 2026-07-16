@@ -96,3 +96,8 @@ class AdvisorChatRepository {
 
 final advisorChatRepositoryProvider =
     Provider<AdvisorChatRepository>((ref) => AdvisorChatRepository(ref.watch(dioProvider)));
+
+/// Due "what happened?" check-ins, surfaced proactively on Home's compact
+/// view — not just when the user happens to type a check-in phrase in chat.
+final dueFollowUpsProvider =
+    FutureProvider.autoDispose<List<FollowUpQuestion>>((ref) => ref.watch(advisorChatRepositoryProvider).followUps());

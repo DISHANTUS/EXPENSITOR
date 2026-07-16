@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.common import Page
-from app.schemas.expense import ExpenseCreate, ExpenseRead, ExpenseUpdate
-from app.services import expense_service
+from app.schemas.expense import ExpenseCreate, ExpenseRead, ExpenseUpdate, PredictedExpense
+from app.services import daily_habit_service, expense_service, settings_service
 from app.services.exceptions import (
     CurrencyNotFoundError,
     FieldNotNullableError,
@@ -70,6 +71,17 @@ async def list_expenses(
         limit=limit,
         offset=offset,
     )
+
+
+# NOTE: must stay ABOVE /{expense_id}, or FastAPI matches this path first and
+# fails trying to parse "predicted-today" as a UUID.
+@router.get("/predicted-today", response_model=list[PredictedExpense],
+            summary="Learned daily habits to confirm in one tap")
+async def predicted_today(current_user: CurrentUser, db: DbSession) -> list[PredictedExpense]:
+    settings = await settings_service.get_settings(db, current_user.id)
+    today = datetime.now(ZoneInfo(settings.timezone or "UTC")).date()
+    rows = await daily_habit_service.predict_today(db, current_user.id, today=today)
+    return [PredictedExpense.model_validate(r) for r in rows]
 
 
 @router.get("/{expense_id}", response_model=ExpenseRead)

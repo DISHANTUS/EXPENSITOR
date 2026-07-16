@@ -18,12 +18,13 @@ class FollowUpQuestion(BaseModel):
     claim: str
     question: str
     options: list[FollowUpOption] = []
+    response_type: str = "choice"  # choice | free_text
 
 
 class FollowUpAnswerIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    answer: str = Field(description="yes | partial | no")
+    answer: str = Field(description="yes | partial | no | explained")
     detail: str | None = Field(default=None, max_length=2000)
 
 
@@ -33,6 +34,7 @@ class FollowUpAck(BaseModel):
     circumstance: str | None = None
     advice_id: str
     lesson_suggestion: str | None = None
+    needs_more_detail: bool = False
 
 
 class MemoryRecallItem(BaseModel):

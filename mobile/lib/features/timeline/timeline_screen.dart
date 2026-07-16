@@ -309,11 +309,11 @@ class _JourneyEntry extends StatelessWidget {
               colors: [AppColors.accent.withValues(alpha: 0.30), AppColors.primary.withValues(alpha: 0.12)],
               begin: Alignment.topLeft, end: Alignment.bottomRight)
           : null,
-      color: milestone ? null : Colors.white.withValues(alpha: future ? 0.03 : 0.05),
+      color: milestone ? null : AppColors.hairline(future ? 0.03 : 0.05),
       border: Border.all(
           color: milestone
               ? AppColors.accent.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: future ? 0.12 : 0.08)),
+              : AppColors.hairline(future ? 0.12 : 0.08)),
       boxShadow: milestone
           ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 8))]
           : null,
@@ -375,7 +375,7 @@ class _JourneyEntry extends StatelessWidget {
     if (milestone) {
       // A single celebratory sweep across the milestone card (once, on reveal).
       animated = animated.shimmer(
-          delay: 250.ms, duration: 1100.ms, color: Colors.white.withValues(alpha: 0.22));
+          delay: 250.ms, duration: 1100.ms, color: AppColors.hairline(0.22));
     }
     return animated;
   }

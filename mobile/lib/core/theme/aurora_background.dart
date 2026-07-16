@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
-/// A slow, living aurora field painted behind every screen (Sprint UI-X). Three
-/// soft blobs (violet / cyan / pink) drift on a long loop over the dark base.
+/// The screen background, painted per [AppColors.active.background] (Sprint
+/// UI-X, extended for the 15-pack rollout). `aurora` is the original slow,
+/// living three-blob field; most of the newer packs use `flat` (solid, no
+/// motion — moving away from the glow IS the point of those themes) or
+/// `scan` (a subtle animated scanline sweep, for Terminal/Cyberpunk).
 class AuroraBackground extends StatefulWidget {
   const AuroraBackground({super.key, this.child, this.intensity = 1.0});
   final Widget? child;
@@ -27,17 +30,23 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final style = AppColors.active.background;
     return Stack(
       children: [
         Positioned.fill(child: ColoredBox(color: AppColors.bg)),
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _c,
-              builder: (_, __) => CustomPaint(painter: _AuroraPainter(_c.value, widget.intensity)),
+        if (style != BackgroundStyle.flat)
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _c,
+                builder: (_, __) => CustomPaint(
+                  painter: style == BackgroundStyle.scan
+                      ? _ScanPainter(_c.value, AppColors.active.on)
+                      : _AuroraPainter(_c.value, widget.intensity),
+                ),
+              ),
             ),
           ),
-        ),
         if (widget.child != null) Positioned.fill(child: widget.child!),
       ],
     );
@@ -67,4 +76,31 @@ class _AuroraPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AuroraPainter old) => old.t != t || old.intensity != intensity;
+}
+
+/// A faint static scanline texture + one brighter line sweeping down on a
+/// loop — the `BackgroundStyle.scan` texture (Terminal, Cyberpunk).
+class _ScanPainter extends CustomPainter {
+  _ScanPainter(this.t, this.lineColor);
+  final double t;
+  final Color lineColor;
+
+  @override
+  void paint(Canvas c, Size s) {
+    final faint = Paint()
+      ..color = lineColor.withValues(alpha: 0.035)
+      ..strokeWidth = 1;
+    for (double y = 0; y < s.height; y += 3) {
+      c.drawLine(Offset(0, y), Offset(s.width, y), faint);
+    }
+    final sweepY = (t * 3 % 1) * s.height; // ~6s sweep (t completes a lap in 18s)
+    final sweep = Paint()
+      ..shader = LinearGradient(
+        colors: [lineColor.withValues(alpha: 0), lineColor.withValues(alpha: 0.10), lineColor.withValues(alpha: 0)],
+      ).createShader(Rect.fromLTWH(0, sweepY - 40, s.width, 80));
+    c.drawRect(Rect.fromLTWH(0, sweepY - 40, s.width, 80), sweep);
+  }
+
+  @override
+  bool shouldRepaint(_ScanPainter old) => old.t != t || old.lineColor != lineColor;
 }

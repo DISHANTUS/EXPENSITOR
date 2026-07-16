@@ -31,7 +31,7 @@ class UserSettings {
         companionName: j['companion_name']?.toString(),
         displayName: j['display_name']?.toString(),
         notificationPreferences: ((j['notification_preferences'] as Map?) ?? const {})
-            .map((k, v) => MapEntry(k.toString(), v == true)),
+            .map((k, v) => MapEntry(k.toString(), v)),
       );
 
   final String baseCurrency;
@@ -43,7 +43,10 @@ class UserSettings {
   final String? voiceLocale;
   final String? companionName;
   final String? displayName;
-  final Map<String, bool> notificationPreferences;
+  /// Bool toggles (speak_celebrations, ...) alongside string preferences
+  /// (free_time_weekday, ...) — one JSONB dict on the backend, so one loosely
+  /// typed map here rather than splitting into parallel fields.
+  final Map<String, dynamic> notificationPreferences;
 }
 
 /// AI's interpretation of a free-text reason (original is preserved by caller).
@@ -109,7 +112,7 @@ class SettingsRepository {
     }
   }
 
-  Future<UserSettings> setNotificationPreferences(Map<String, bool> prefs) async {
+  Future<UserSettings> setNotificationPreferences(Map<String, dynamic> prefs) async {
     try {
       final res = await _dio.patch<dynamic>('/users/me/settings', data: {'notification_preferences': prefs});
       return UserSettings.fromJson((res.data as Map).cast<String, dynamic>());

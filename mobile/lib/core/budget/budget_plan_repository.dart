@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../cache/offline_cache.dart';
 
 double _d(dynamic v) => double.tryParse('${v ?? 0}') ?? 0;
 String _s(dynamic v) => '${v ?? ''}';
@@ -189,8 +190,9 @@ class RecommendationSet {
 }
 
 class BudgetPlanRepository {
-  BudgetPlanRepository(this._dio);
+  BudgetPlanRepository(this._dio, this._cache);
   final Dio _dio;
+  final OfflineCache _cache;
 
   Future<Map<String, dynamic>> getProfile() => _get('/users/me/profile');
 
@@ -211,18 +213,12 @@ class BudgetPlanRepository {
       RecommendationSet.fromJson(await _get('/budget/recommendations',
           query: target == null ? null : {'target': target}));
 
-  Future<Map<String, dynamic>> _get(String path, {Map<String, dynamic>? query}) async {
-    try {
-      final res = await _dio.get<dynamic>(path, queryParameters: query);
-      return (res.data as Map).cast<String, dynamic>();
-    } on DioException catch (e) {
-      throw mapDioError(e);
-    }
-  }
+  Future<Map<String, dynamic>> _get(String path, {Map<String, dynamic>? query}) =>
+      _cache.fetchJson(_dio, path, query: query);
 }
 
-final budgetPlanRepositoryProvider =
-    Provider<BudgetPlanRepository>((ref) => BudgetPlanRepository(ref.watch(dioProvider)));
+final budgetPlanRepositoryProvider = Provider<BudgetPlanRepository>(
+    (ref) => BudgetPlanRepository(ref.watch(dioProvider), ref.watch(offlineCacheProvider)));
 
 final profileProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) => ref.watch(budgetPlanRepositoryProvider).getProfile());

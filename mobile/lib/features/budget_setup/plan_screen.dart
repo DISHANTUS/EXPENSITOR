@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/companion_scaffold.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/glass.dart';
 
 String _money(String cur, double v) => '$cur ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}';
@@ -221,7 +222,7 @@ class PlanScreen extends ConsumerWidget {
 
   Widget _pill(BuildContext context, String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: AppColors.hairline(0.08), borderRadius: BorderRadius.circular(20)),
         child: Text(text, style: Theme.of(context).textTheme.labelSmall),
       );
 }

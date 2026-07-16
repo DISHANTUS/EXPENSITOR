@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/cache/offline_cache.dart';
 import '../../core/format/dates.dart';
 import 'calendar_models.dart';
 
 class CalendarRepository {
-  CalendarRepository(this._dio);
+  CalendarRepository(this._dio, this._cache);
   final Dio _dio;
+  final OfflineCache _cache;
 
   Future<Map<String, CalendarMarkerType>> markerTypes() async {
     try {
@@ -31,18 +33,12 @@ class CalendarRepository {
 
   Future<DayDetail> day(DateTime date) => _get('/calendar/day/${ymd(date)}', DayDetail.fromJson);
 
-  Future<T> _get<T>(String path, T Function(Map<String, dynamic>) parse, {Map<String, dynamic>? query}) async {
-    try {
-      final res = await _dio.get<dynamic>(path, queryParameters: query);
-      return parse((res.data as Map).cast<String, dynamic>());
-    } on DioException catch (e) {
-      throw mapDioError(e);
-    }
-  }
+  Future<T> _get<T>(String path, T Function(Map<String, dynamic>) parse, {Map<String, dynamic>? query}) async =>
+      parse(await _cache.fetchJson(_dio, path, query: query));
 }
 
-final calendarRepositoryProvider =
-    Provider<CalendarRepository>((ref) => CalendarRepository(ref.watch(dioProvider)));
+final calendarRepositoryProvider = Provider<CalendarRepository>(
+    (ref) => CalendarRepository(ref.watch(dioProvider), ref.watch(offlineCacheProvider)));
 
 /// Cached registry; falls back to the built-in subset if the catalog fetch fails.
 final markerRegistryProvider = FutureProvider<Map<String, CalendarMarkerType>>((ref) async {

@@ -125,3 +125,25 @@ async def test_selected_voice_round_trip_and_clear(client: AsyncClient):
     # Clearing with an empty string falls back to the system default.
     resp = await client.patch(SETTINGS, headers=headers, json={"selected_voice": "", "voice_locale": None})
     assert resp.json()["selected_voice"] is None
+
+
+async def test_free_time_preferences_round_trip(client: AsyncClient):
+    """Regression guard: NotificationPreferences is a strict (extra=forbid)
+    schema, so a new preference key needs an explicit field or every PATCH
+    carrying it 422s with "Extra inputs are not permitted" — caught live via
+    the mobile Settings screen, not by the original schema addition."""
+    headers = await _auth_headers(client, email="freetime@example.com")
+    resp = await client.patch(SETTINGS, headers=headers,
+                              json={"notification_preferences": {"free_time_weekday": "evening"}})
+    assert resp.status_code == 200
+    prefs = resp.json()["notification_preferences"]
+    assert prefs["free_time_weekday"] == "evening"
+    assert prefs["free_time_weekend"] is None
+    # Existing bool prefs still default correctly alongside the new fields.
+    assert prefs["speak_celebrations"] is True
+
+    resp2 = await client.patch(SETTINGS, headers=headers,
+                               json={"notification_preferences": {**prefs, "free_time_weekend": "afternoon"}})
+    assert resp2.status_code == 200
+    assert resp2.json()["notification_preferences"]["free_time_weekday"] == "evening"
+    assert resp2.json()["notification_preferences"]["free_time_weekend"] == "afternoon"

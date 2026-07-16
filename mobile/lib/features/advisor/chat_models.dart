@@ -408,6 +408,7 @@ class FollowUpQuestion {
     required this.claim,
     required this.question,
     this.options = const [],
+    this.responseType = 'choice',
   });
   factory FollowUpQuestion.fromJson(Map<String, dynamic> j) => FollowUpQuestion(
         id: _s(j['id']) ?? '',
@@ -417,6 +418,7 @@ class FollowUpQuestion {
         claim: _s(j['claim']) ?? '',
         question: _s(j['question']) ?? '',
         options: _list(j['options'], FollowUpOption.fromJson),
+        responseType: _s(j['response_type']) ?? 'choice',
       );
   final String id;
   final String kind;
@@ -425,18 +427,26 @@ class FollowUpQuestion {
   final String claim;
   final String question;
   final List<FollowUpOption> options;
+  /// 'choice' (Yes/Partially/No chips) or 'free_text' (a short reason).
+  final String responseType;
 }
 
 class FollowUpAck {
-  const FollowUpAck({required this.acknowledged, this.circumstance, this.lessonSuggestion});
+  const FollowUpAck({
+    required this.acknowledged, this.circumstance, this.lessonSuggestion, this.needsMoreDetail = false,
+  });
   factory FollowUpAck.fromJson(Map<String, dynamic> j) => FollowUpAck(
         acknowledged: _s(j['acknowledged']) ?? '',
         circumstance: _s(j['circumstance']),
         lessonSuggestion: _s(j['lesson_suggestion']),
+        needsMoreDetail: j['needs_more_detail'] == true,
       );
   final String acknowledged;
   final String? circumstance;
   final String? lessonSuggestion;
+  /// True when a free_text reason was judged too thin — the same question
+  /// stays pending for one gentler re-ask (see advice_memory_service.answer).
+  final bool needsMoreDetail;
 }
 
 // --- Companion intelligence (4b-5b) ------------------------------------------

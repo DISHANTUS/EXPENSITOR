@@ -56,3 +56,16 @@ class ExpenseRead(BaseModel):
     expense_date: date
     created_at: datetime
     updated_at: datetime
+
+
+class PredictedExpense(BaseModel):
+    """A learned daily habit the compact Home offers to log in one tap
+    ("is the ₹200 for travel over?"). Never written server-side — confirming
+    is an ordinary POST /expenses from the client."""
+
+    category_id: uuid.UUID
+    label: str
+    amount: float
+    occurrences: int
+    day_type: str        # weekday | weekend
+    confidence: str      # medium | high

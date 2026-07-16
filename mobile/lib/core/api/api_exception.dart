@@ -42,8 +42,10 @@ AppError mapDioError(DioException e) {
       return _fromResponse(e.response);
     case DioExceptionType.cancel:
       return const UnknownError('Request cancelled.');
-    case DioExceptionType.badCertificate:
-    case DioExceptionType.unknown:
+    // badCertificate/unknown, plus any future DioExceptionType values (e.g.
+    // transformTimeout) — not exhaustively enumerated on purpose, so a Dio
+    // upgrade adding a case doesn't break the build again.
+    default:
       return e.error is AppError ? e.error as AppError : const NetworkError();
   }
 }
@@ -53,6 +55,12 @@ AppError _fromResponse(Response<dynamic>? response) {
   if (status == 401 || status == 403) return const UnauthorizedError();
   if (status == 422) return _validation(response?.data);
   if (status >= 500) return const ServerError();
+  // 404/405 are routing/method mismatches, not business-logic messages —
+  // Starlette's own "Not Found"/"Method Not Allowed" strings are never
+  // meant for a user to read, so don't surface them verbatim.
+  if (status == 404 || status == 405) {
+    return const ValidationError("That didn't go through — please try again.");
+  }
   // 4xx with a string detail
   final detail = _detailString(response?.data);
   return ValidationError(detail ?? 'Request could not be completed.');

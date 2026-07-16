@@ -5,11 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../analytics/analytics.dart';
+import '../cache/offline_cache.dart';
 import '../intervention/intervention_controller.dart';
 import '../nav/app_drawer.dart';
 import '../settings/settings_repository.dart';
+import '../theme/app_theme.dart';
 import '../theme/aurora_background.dart';
 import '../theme/glass.dart';
+import '../theme/theme_voice.dart';
 import '../voice/voice_memory.dart';
 import '../voice/voice_plan.dart';
 import '../voice/voice_service.dart';
@@ -57,6 +60,13 @@ Future<void> _maybeAutoSpeakGreeting(WidgetRef ref, VoicePlan plan, Map prefs) a
 /// the user moves between screens (the companion stays available, just compact).
 final companionCollapsedProvider = StateProvider<bool>((_) => false);
 
+/// A short-lived "Advary just replied" pulse, set by the Chat screen when a new
+/// AI text turn arrives (no real TTS voice involved) and cleared automatically
+/// after ~1.2s. `orbState` below ORs this in alongside the real speaking check,
+/// so a text reply reads as "Advary is speaking" instead of "text appeared" —
+/// the actual voice/TTS speaking state is untouched.
+final chatReplyPulseProvider = StateProvider<bool>((_) => false);
+
 /// The frame every authenticated screen uses: Drawer (☰) + mic (🎤) + an
 /// always-available AI companion. The face is a live, rotating mood (4c-A) that
 /// falls back to the static [mood] while loading/offline.
@@ -90,7 +100,7 @@ class CompanionScaffold extends ConsumerWidget {
     // Daily greeting + live mood are Home-only; other pages keep their own commentary.
     final live = showGreeting ? ref.watch(companionMoodProvider).valueOrNull : null;
     final voiceState = ref.watch(voiceControllerProvider);
-    final speaking = voiceState == VoiceState.speaking;
+    final speaking = voiceState == VoiceState.speaking || ref.watch(chatReplyPulseProvider);
 
     // Reactions are GLOBAL — they show over the greeting/commentary on any page.
     final reactions = ref.watch(reactionQueueProvider);
@@ -165,6 +175,7 @@ class CompanionScaffold extends ConsumerWidget {
           children: [
             Column(
           children: [
+            const _OfflineBanner(),
             if (!collapsed)
               _CompanionPanel(
                 commentary: commentary,
@@ -202,6 +213,39 @@ class CompanionScaffold extends ConsumerWidget {
             : null,
       ),
       ),
+    );
+  }
+}
+
+/// A slim, dismissable-by-nature (it just disappears once connectivity is
+/// back) banner: shown whenever any [OfflineCache]-backed screen is
+/// currently displaying its last-cached data instead of a live fetch.
+class _OfflineBanner extends ConsumerWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cache = ref.watch(offlineCacheProvider);
+    return ValueListenableBuilder<bool>(
+      valueListenable: cache.isOffline,
+      builder: (context, offline, _) {
+        if (!offline) return const SizedBox.shrink();
+        final p = AppColors.active;
+        return Container(
+          width: double.infinity,
+          color: p.muted,
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_outlined, size: 14, color: p.on),
+              const SizedBox(width: 6),
+              Text('Offline — showing saved data',
+                  style: TextStyle(color: p.on, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -344,23 +388,30 @@ class _GreetingBubbleState extends ConsumerState<_GreetingBubble> {
     }
   }
 
+  /// Surface phrasing per the active theme's personality — never touches a
+  /// number, date, or name, only line prefixes/final punctuation (see
+  /// `theme_voice.dart`). Applied right at render time so every text source
+  /// (Ollama-narrated, deterministic salutation+lines, or the plain
+  /// fallback) gets it, without changing what the engines actually computed.
+  String _voice(String text) => themeVoice(text, AppColors.active.personality);
+
   Widget _body(Greeting? g) {
     final tt = Theme.of(context).textTheme;
     if (g != null && g.narrationSource == 'ollama' && g.displayText.isNotEmpty) {
-      return Text(g.displayText, key: ValueKey('o:${g.displayText}'), style: tt.bodyMedium);
+      return Text(_voice(g.displayText), key: ValueKey('o:${g.displayText}'), style: tt.bodyMedium);
     }
     if (g != null && g.salutation.isNotEmpty) {
       return Column(
         key: ValueKey('d:${g.displayText}'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(g.salutation, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(_voice(g.salutation), style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           for (final line in g.lines)
-            Padding(padding: const EdgeInsets.only(top: 2), child: Text(line, style: tt.bodyMedium)),
+            Padding(padding: const EdgeInsets.only(top: 2), child: Text(_voice(line), style: tt.bodyMedium)),
         ],
       );
     }
-    return Text(widget.commentary ?? 'I’m here whenever you need me.', key: const ValueKey('fallback'),
+    return Text(_voice(widget.commentary ?? 'I’m here whenever you need me.'), key: const ValueKey('fallback'),
         style: tt.bodyMedium);
   }
 

@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Voice Conversation Layer (Sprint 5c): mic capture + on-device STT. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Deferred spending-shift check-ins: a local (not push) notification
+         timed for the user's stated free-time window. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="expensitor_mobile"
         android:name="${applicationName}"

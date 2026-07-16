@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +9,10 @@ import '../../core/api/api_exception.dart';
 import '../../core/companion/companion_scaffold.dart';
 import '../../core/format/money.dart';
 import '../../core/onboarding/tour_controller.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/glass.dart';
+import '../../core/theme/theme_voice.dart';
+import '../../core/theme/vitality.dart';
 import 'advisor_chat_repository.dart';
 import 'chat_models.dart';
 import 'widgets/follow_up_card.dart';
@@ -42,12 +49,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final Map<String, String> _followUpAcks = {};   // advice_id -> acknowledgement text
   ChatContext? _session;
   bool _sending = false;
+  Timer? _replyPulseTimer;
 
   @override
   void dispose() {
     _input.dispose();
     _scroll.dispose();
+    _replyPulseTimer?.cancel();
     super.dispose();
+  }
+
+  /// Briefly drives the companion orb's speaking visual on a new AI reply —
+  /// separate from real TTS voice (untouched), just a short-lived cue so a
+  /// text reply reads as "Advary is speaking", not "text appeared".
+  void _pulseOrb() {
+    ref.read(chatReplyPulseProvider.notifier).state = true;
+    _replyPulseTimer?.cancel();
+    _replyPulseTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) ref.read(chatReplyPulseProvider.notifier).state = false;
+    });
   }
 
   Future<void> _send(String text) async {
@@ -70,11 +90,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _session = turn.session ?? _session;
         _sending = false;
       });
+      _pulseOrb();
     } on AppError catch (e) {
       setState(() {
         _messages.add(_Msg.ai(ChatTurn(type: 'answer', message: e.message)));
         _sending = false;
       });
+      _pulseOrb();
     }
     _scrollDown();
   }
@@ -89,11 +111,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _messages.add(_Msg.explain(explanation));
         _sending = false;
       });
+      _pulseOrb();
     } on AppError catch (e) {
       setState(() {
         _messages.add(_Msg.ai(ChatTurn(type: 'answer', message: e.message)));
         _sending = false;
       });
+      _pulseOrb();
     }
     _scrollDown();
   }
@@ -111,38 +135,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         )));
         _sending = false;
       });
+      _pulseOrb();
     } on AppError catch (e) {
       setState(() {
         _messages.add(_Msg.ai(ChatTurn(type: 'answer', message: e.message)));
         _sending = false;
       });
+      _pulseOrb();
     }
     _scrollDown();
   }
 
-  Future<void> _answerFollowUp(String adviceId, String value) async {
-    if (_followUpAcks.containsKey(adviceId)) return;
+  /// Returns null once answered, or an inline notice for the card to show
+  /// (a "say more" nudge, or an error) — see [FollowUpCard.onAnswer].
+  Future<String?> _answerFollowUp(String adviceId, String value, {String? detail}) async {
+    if (_followUpAcks.containsKey(adviceId)) return null;
     try {
-      final ack = await ref.read(advisorChatRepositoryProvider).answerFollowUp(adviceId, value);
+      final ack = await ref.read(advisorChatRepositoryProvider).answerFollowUp(adviceId, value, detail: detail);
+      // Too thin a reason: stays pending for one more try — keep the card
+      // open with the nudge inline instead of locking it as answered.
+      if (ack.needsMoreDetail) return ack.acknowledged;
       final text = ack.lessonSuggestion != null && ack.lessonSuggestion!.isNotEmpty
           ? '${ack.acknowledged}\n💡 ${ack.lessonSuggestion}'
           : ack.acknowledged;
       setState(() => _followUpAcks[adviceId] = text);
+      _scrollDown();
+      return null;
     } on AppError catch (e) {
-      setState(() => _followUpAcks[adviceId] = e.message);
+      return e.message;   // the typed reason stays put, ready to retry
     }
-    _scrollDown();
   }
 
-  Future<void> _answerReflection(String trigger, String value) async {
-    if (_followUpAcks.containsKey('refl:$trigger')) return;
+  Future<String?> _answerReflection(String trigger, String value) async {
+    if (_followUpAcks.containsKey('refl:$trigger')) return null;
     try {
       final ack = await ref.read(advisorChatRepositoryProvider).answerReflection(trigger, value);
       setState(() => _followUpAcks['refl:$trigger'] = ack);
+      _scrollDown();
+      return null;
     } on AppError catch (e) {
-      setState(() => _followUpAcks['refl:$trigger'] = e.message);
+      return e.message;
     }
-    _scrollDown();
   }
 
   Future<void> _forgetLesson(String lessonId) async {
@@ -176,14 +209,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     padding: const EdgeInsets.all(12),
                     itemCount: _messages.length + (_sending ? 1 : 0),
                     itemBuilder: (context, i) {
-                      if (i >= _messages.length) return const _Typing();
+                      if (i >= _messages.length) return const _ThemedTyping();
                       final m = _messages[i];
-                      if (m.text != null) return _UserBubble(m.text!);
-                      if (m.explanation != null) return _ExplanationCard(m.explanation!);
-                      return _AiTurn(m.turn!, onTap: _send, onExplain: _explain, onLever: _runForecast,
-                          onAnswerFollowUp: _answerFollowUp, onAnswerReflection: _answerReflection,
-                          onForgetLesson: _forgetLesson, followUpAcks: _followUpAcks,
-                          onOpen: (r) => context.go(r));
+                      Widget bubble;
+                      if (m.text != null) {
+                        bubble = _UserBubble(m.text!);
+                      } else if (m.explanation != null) {
+                        bubble = _ExplanationCard(m.explanation!);
+                      } else {
+                        bubble = _AiTurn(m.turn!, onTap: _send, onExplain: _explain, onLever: _runForecast,
+                            onAnswerFollowUp: _answerFollowUp, onAnswerReflection: _answerReflection,
+                            onForgetLesson: _forgetLesson, followUpAcks: _followUpAcks,
+                            onOpen: (r) => context.go(r));
+                      }
+                      // Every new bubble fades, slides up slightly, and grows in from
+                      // ~95% — a real entrance, not just an appended list row.
+                      return bubble.animate().fadeIn(duration: 260.ms).slideY(begin: 0.08, end: 0).scale(
+                          begin: const Offset(0.95, 0.95), end: const Offset(1, 1), duration: 260.ms);
                     },
                   ),
           ),
@@ -222,14 +264,35 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: _sending ? null : () => _send(_input.text),
-                icon: const Icon(Icons.send),
-              ),
+              _SendButton(sending: _sending, onSend: () => _send(_input.text)),
             ],
           ),
         ),
       );
+}
+
+/// Wraps the send button in a scrolling diagonal-stripe background when the
+/// active theme's `motion.movingStripes` is set (Comic, Velocity, Riot) — the
+/// Flutter equivalent of the "Ask Advary" button motion validated on the
+/// Comic HTML prototype. Every other theme gets a plain filled icon button.
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.sending, required this.onSend});
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppColors.active;
+    final button = IconButton.filled(onPressed: sending ? null : onSend, icon: const Icon(Icons.send));
+    if (!p.motion.movingStripes || sending) return button;
+    return ClipOval(
+      child: MovingStripeBackground(
+        stripeColor: (p.onPrimaryOverride ?? Colors.white).withValues(alpha: 0.25),
+        pitch: 10,
+        child: button,
+      ),
+    );
+  }
 }
 
 class _UserBubble extends StatelessWidget {
@@ -240,23 +303,42 @@ class _UserBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
+      child: GlassCard(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(14)),
+        radius: 14,
+        gradient: LinearGradient(colors: [cs.primaryContainer, cs.primaryContainer]),
         child: Text(text),
       ),
     );
   }
 }
 
-class _Typing extends StatelessWidget {
-  const _Typing();
+/// The "Advary is thinking" indicator — a personality-driven variant for a
+/// few themes deep (Terminal, Cyberpunk, Comic); every other theme keeps the
+/// plain spinner. One themed-variant branch, not a new loading-state system.
+class _ThemedTyping extends StatelessWidget {
+  const _ThemedTyping();
+
   @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.all(8),
-        child: Align(alignment: Alignment.centerLeft, child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))),
-      );
+  Widget build(BuildContext context) {
+    final p = AppColors.active;
+    Widget child = switch (p.id) {
+      'terminal' => Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('Thinking', style: TextStyle(color: p.primary, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          const BlinkingCursor(width: 6, height: 13),
+        ]),
+      'cyberpunk' => Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('Scanning…', style: TextStyle(color: p.primary, fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+        ]),
+      'comic' => Row(mainAxisSize: MainAxisSize.min, children: [
+          HalftoneDots(color: p.primary, child: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+        ]),
+      _ => const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+    };
+    return Padding(padding: const EdgeInsets.all(8), child: Align(alignment: Alignment.centerLeft, child: child));
+  }
 }
 
 class _AiTurn extends StatelessWidget {
@@ -267,8 +349,8 @@ class _AiTurn extends StatelessWidget {
   final void Function(String) onTap;
   final void Function(String) onExplain;
   final void Function(List<String>) onLever;
-  final void Function(String adviceId, String value) onAnswerFollowUp;
-  final void Function(String trigger, String value) onAnswerReflection;
+  final Future<String?> Function(String adviceId, String value, {String? detail}) onAnswerFollowUp;
+  final Future<String?> Function(String trigger, String value) onAnswerReflection;
   final void Function(String lessonId) onForgetLesson;
   final Map<String, String> followUpAcks;
   final void Function(String route) onOpen;
@@ -293,7 +375,8 @@ class _AiTurn extends StatelessWidget {
       final q = turn.followUp!;
       return Align(
         alignment: Alignment.centerLeft,
-        child: FollowUpCard(q, answered: followUpAcks[q.id], onAnswer: (v) => onAnswerFollowUp(q.id, v)),
+        child: FollowUpCard(q, answered: followUpAcks[q.id],
+            onAnswer: (v, {detail}) => onAnswerFollowUp(q.id, v, detail: detail)),
       );
     }
     // Month-end / win reflection (reuses the check-in card).
@@ -304,7 +387,7 @@ class _AiTurn extends StatelessWidget {
       return Align(
         alignment: Alignment.centerLeft,
         child: FollowUpCard(q, answered: followUpAcks['refl:${r.trigger}'],
-            onAnswer: (v) => onAnswerReflection(r.trigger, v)),
+            onAnswer: (v, {detail}) => onAnswerReflection(r.trigger, v)),
       );
     }
     // Structured "what do you know about me?".
@@ -348,15 +431,23 @@ class _AiTurn extends StatelessWidget {
     );
   }
 
-  Widget _bubble(BuildContext context, String text) => Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Text(text),
-      );
+  Widget _bubble(BuildContext context, String text) {
+    final p = AppColors.active;
+    final voiced = themeVoice(text, p.personality);
+    return GlassCard(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      radius: 14,
+      child: p.id == 'terminal'
+          // Terminal's signature: the reply types itself out, cursor and all.
+          ? Row(mainAxisSize: MainAxisSize.min, children: [
+              Flexible(child: TypewriterText(voiced, style: TextStyle(color: p.primary, fontFamily: 'monospace'))),
+              const SizedBox(width: 4),
+              const BlinkingCursor(width: 6, height: 14),
+            ])
+          : Text(voiced),
+    );
+  }
 
   Widget _chips(List<ChatOption> opts) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),

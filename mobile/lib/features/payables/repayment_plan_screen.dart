@@ -7,6 +7,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/companion/companion_orb.dart';
 import '../../core/format/dates.dart';
 import '../../core/intervention/intervention_controller.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/glass.dart';
 import 'payable_repository.dart';
 
@@ -196,7 +197,7 @@ class _PlanCard extends StatelessWidget {
     return GlassCard(
       gradient: LinearGradient(
         begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [accent.withValues(alpha: 0.16), Colors.black.withValues(alpha: 0.28)]),
+        colors: [accent.withValues(alpha: 0.16), AppColors.active.surfaceHi.withValues(alpha: 0.28)]),
       borderColor: accent.withValues(alpha: 0.30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,7 +222,7 @@ class _PlanCard extends StatelessWidget {
                 if (a.date != null)
                   ActionChip(label: Text(a.label), onPressed: () => onPickAlt(a.date!))
                 else
-                  Chip(label: Text(a.label), backgroundColor: Colors.white.withValues(alpha: 0.05)),
+                  Chip(label: Text(a.label), backgroundColor: AppColors.hairline(0.05)),
             ]),
           ],
           const SizedBox(height: 14),

@@ -274,6 +274,7 @@ class AdviceKind(str, enum.Enum):
     budget = "budget"               # a monthly budget intention
     reflection = "reflection"       # a month-end reflection prompt (4b-5b)
     success = "success"             # a streak / win worth remembering (4b-5b)
+    spending_shift = "spending_shift"  # a category's rolling average moved and held (learning loop)
 
 
 class AdviceStatus(str, enum.Enum):
