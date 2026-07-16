@@ -169,6 +169,16 @@ def _plural_days(n: int) -> str:
     return "day" if n == 1 else "days"
 
 
+# Where "often" becomes "usually". At the 0.6 floor a lean is 3-in-5, and
+# calling that "usually" oversells it — the adverb has to move with the
+# evidence, not sit at the strongest word the moment the gate opens.
+STRONG_RATE = 0.75
+
+
+def _frequency_word(hits: int, total: int) -> str:
+    return "Usually" if total and hits / total >= STRONG_RATE else "Often"
+
+
 def describe(entries: list[dict[str, Any]]) -> dict[str, Any]:
     """Everything worth saying about this diary, in the user's own vocabulary.
 
@@ -201,17 +211,19 @@ def describe(entries: list[dict[str, Any]]) -> dict[str, Any]:
         })
         wp = weekday_pattern(dated, word)
         if wp:
+            adverb = _frequency_word(wp["hits"], wp["total"])
             observations.append({
                 "kind": "weekday",
                 "word": word,
-                "text": f"Usually a {wp['weekday']} — {wp['hits']} of the {wp['total']} times you mentioned it.",
+                "text": f"{adverb} a {wp['weekday']} — {wp['hits']} of the {wp['total']} times you mentioned it.",
             })
         fw = first_week_pattern(dated, word)
         if fw:
+            lead = "Mostly" if _frequency_word(fw["hits"], fw["total"]) == "Usually" else "Often"
             observations.append({
                 "kind": "first_week",
                 "word": word,
-                "text": f"Mostly early in the month — {fw['hits']} of {fw['total']} times in the first week.",
+                "text": f"{lead} early in the month — {fw['hits']} of {fw['total']} times in the first week.",
             })
 
     ask = None

@@ -148,6 +148,27 @@ def test_two_thursdays_are_a_coincidence_not_a_habit():
     assert dp.weekday_pattern(entries, "mango") is None
 
 
+def test_the_adverb_moves_with_the_evidence():
+    # Caught by reading the live output: a bare-minimum 3-of-5 lean was being
+    # announced as "Usually a Thursday". The count was right there in the
+    # sentence, but the adverb still oversold it.
+    assert dp._frequency_word(3, 5) == "Often"      # 0.60 — just over the gate
+    assert dp._frequency_word(4, 5) == "Usually"    # 0.80 — earns the word
+    assert dp._frequency_word(5, 5) == "Usually"
+
+
+def test_a_bare_minimum_lean_is_described_as_often_not_usually():
+    entries = [_e(d, "bought mango") for d in THU[:3]] + [_e(d, "bought mango") for d in MON[:2]]
+    text = next(o for o in dp.describe(entries)["observations"] if o["kind"] == "weekday")["text"]
+    assert text.startswith("Often a Thursday")
+
+
+def test_a_strong_lean_still_gets_the_stronger_word():
+    entries = [_e(d, "bought mango") for d in THU[:4]] + [_e(MON[0], "bought mango")]
+    text = next(o for o in dp.describe(entries)["observations"] if o["kind"] == "weekday")["text"]
+    assert text.startswith("Usually a Thursday")
+
+
 def test_a_mostly_thursday_habit_survives_one_stray_day():
     entries = [_e(d, "bought mango") for d in THU[:4]] + [_e(MON[0], "bought mango")]
     wp = dp.weekday_pattern(entries, "mango")
