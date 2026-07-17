@@ -17,8 +17,14 @@ import '../budget_setup/festival_repository.dart';
 /// timezone, then the base currency — no prompt, nothing to configure.
 const _regionLabels = <String, String>{
   'IN': 'India',
+  'IN-TN': 'Tamil Nadu',
   'JP': 'Japan',
 };
+
+/// Tamil Nadu sits on top of India rather than replacing it — tick both and you
+/// keep Deepavali and gain Pongal. Said out loud in the UI because "India +
+/// Tamil Nadu" otherwise reads like you're picking the same thing twice.
+const _additiveRegions = {'IN-TN'};
 
 class FestivalRegionsTile extends ConsumerStatefulWidget {
   const FestivalRegionsTile({super.key});
@@ -88,11 +94,20 @@ class _FestivalRegionsTileState extends ConsumerState<FestivalRegionsTile> {
               ],
             ),
           ),
-          if (chosen.length > 1)
+          if (chosen.any(_additiveRegions.contains) && !chosen.contains('IN'))
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Text(
-                "I'll track both, in date order — moving somewhere doesn't mean the "
+                'Tick India too — Tamil Nadu adds Pongal and Karthigai Deepam on top '
+                "of the country-wide ones, it doesn't include them.",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            )
+          else if (chosen.length > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                "I'll track them all, in date order — moving somewhere doesn't mean the "
                 'festivals you grew up with stop being yours.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),

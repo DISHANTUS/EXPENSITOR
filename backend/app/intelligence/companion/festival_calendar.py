@@ -25,6 +25,10 @@ rather than trusted blind):
   - drikpanchang.com Indian calendar 2026 / 2027 / 2028 — the Hindu dates.
     Authoritative panchang; used to settle the conflicts below.
   - calendarr.com/india — Indian public holidays.
+  - thirukanitham.com 2026 / 2027 (Drik method, Lahiri Ayanamsha) and
+    prokerala.com — the Tamil dates. They agree on Pongal 2026/2027/2028 = 15
+    Jan; publicholidays.lk's 14 Jan 2028 is Sri Lanka's convention, not Tamil
+    Nadu's, and was discarded.
   - nippon.com's Japanese national holiday list for 2027 — the statutory dates
     and the substitute-holiday rule. japan-guide.com for Golden Week / Obon
     behaviour.
@@ -36,10 +40,18 @@ rather than trusted blind):
     Both were wrong. Do not re-introduce them.
 
 Known gaps, stated rather than hidden:
-  - India: regional festivals are missing — Onam, Pongal by name, Vishu, Durga
-    Puja as distinct from Dussehra. Makar Sankranti covers the same mid-January
-    harvest window that Tamil Nadu calls Pongal, but it is not the same word and
-    a Kerala user gets nothing for Onam.
+  - Still missing: Kerala (Onam, Vishu), Bengal (Durga Puja as its own
+    multi-day event rather than Dussehra), and everywhere that isn't India or
+    Japan. A user there gets nothing, which is correct — better than someone
+    else's festivals — but it is a gap, not a design.
+  - Tamil Nadu runs out sooner than India: Pongal 2028 is the last row (the
+    2028 dates for Puthandu, Aadi Perukku and Karthigai Deepam are not sourced
+    yet — Puthandu can slip to 13 Apr in a leap year, and Karthigai Deepam
+    moves by up to a fortnight, so neither is safe to compute). After Jan 2028
+    a Tamil user quietly falls back to the Indian rows until this is topped up.
+  - Someone picking India + Tamil Nadu sees both Makar Sankranti (14 Jan) and
+    Pongal (15 Jan). Redundant-looking, but genuinely two observances a day
+    apart, so both are kept rather than one silently swallowing the other.
   - Japan: Obon's mid-August dates are the majority convention; Okinawa and
     parts of Tokyo keep different ones.
 """
@@ -52,10 +64,19 @@ from datetime import date, timedelta
 REGION_INDIA = "IN"
 REGION_JAPAN = "JP"
 
+# Tamil Nadu is ADDITIVE to India, not a replacement: a Tamil user still keeps
+# Deepavali and the rest, and picks up Pongal, Puthandu and Karthigai Deepam on
+# top. That's what the multi-select is for — tick India + Tamil Nadu.
+#
+# It is not derivable from currency or timezone (a phone in Chennai and a phone
+# in Delhi are both +05:30 and both INR), so it can only ever come from the
+# setting. Which is the whole reason the setting exists.
+REGION_TAMIL_NADU = "IN-TN"
+
 # Every region with a calendar on file. Anything outside this is rejected rather
 # than stored: a setting naming a region we have no dates for is a promise we
 # cannot keep.
-KNOWN_REGIONS = (REGION_INDIA, REGION_JAPAN)
+KNOWN_REGIONS = (REGION_INDIA, REGION_JAPAN, REGION_TAMIL_NADU)
 
 # Which region's festivals a user sees, derived from the currency they think in.
 # A proxy, and an honest one: it needs no migration, no new question at signup,
@@ -191,6 +212,32 @@ FESTIVALS: tuple[Festival, ...] = (
     # still keep other dates; this is the majority convention, not a universal).
     Festival("Obon", date(2027, 8, 13), REGION_JAPAN, lead_days=12, trail_days=5),
     Festival("Silver Week", date(2027, 9, 20), REGION_JAPAN, lead_days=10, trail_days=4),
+    # --- Tamil Nadu ----------------------------------------------------------
+    # Sources: thirukanitham.com 2026/2027 (Drik method, Lahiri Ayanamsha),
+    # cross-checked against prokerala's Pongal pages and drikpanchang.
+    #
+    # Pongal is NOT an alias for Makar Sankranti, however tempting. Same solar
+    # event, different day when the sankranti moment falls after sunset: in 2026
+    # Makar Sankranti is 14 Jan while Thai Pongal is 15 Jan, because the Tamil
+    # month Thai starts the following morning. Aliasing them would be a day
+    # wrong every few years — which for a four-day festival is the difference
+    # between warning someone before the shopping and after it.
+    #
+    # Anchored at Thai Pongal, but the window opens 11 days early (new clothes,
+    # sugarcane, the trip home) and runs through Mattu and Kaanum Pongal.
+    #
+    # NOTE: publicholidays.lk gives Thai Pongal 2028 as 14 Jan. That is Sri
+    # Lanka's convention, not Tamil Nadu's — two Indian sources say 15 Jan.
+    Festival("Pongal", date(2026, 1, 15), REGION_TAMIL_NADU, lead_days=11, trail_days=2),
+    Festival("Puthandu", date(2026, 4, 14), REGION_TAMIL_NADU, lead_days=5, trail_days=1),
+    Festival("Aadi Perukku", date(2026, 8, 3), REGION_TAMIL_NADU, lead_days=3, trail_days=1),
+    Festival("Karthigai Deepam", date(2026, 11, 24), REGION_TAMIL_NADU, lead_days=5, trail_days=1),
+    Festival("Pongal", date(2027, 1, 15), REGION_TAMIL_NADU, lead_days=11, trail_days=2),
+    Festival("Puthandu", date(2027, 4, 14), REGION_TAMIL_NADU, lead_days=5, trail_days=1),
+    Festival("Aadi Perukku", date(2027, 8, 3), REGION_TAMIL_NADU, lead_days=3, trail_days=1),
+    Festival("Karthigai Deepam", date(2027, 12, 12), REGION_TAMIL_NADU, lead_days=5, trail_days=1),
+    Festival("Pongal", date(2028, 1, 15), REGION_TAMIL_NADU, lead_days=11, trail_days=2),
+
     Festival("Shogatsu", date(2028, 1, 1), REGION_JAPAN, lead_days=14, trail_days=2),
     Festival("Golden Week", date(2028, 4, 29), REGION_JAPAN, lead_days=30, trail_days=7),
     Festival("Obon", date(2028, 8, 13), REGION_JAPAN, lead_days=12, trail_days=5),

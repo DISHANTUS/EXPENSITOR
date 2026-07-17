@@ -426,3 +426,79 @@ async def test_the_timezone_hint_reaches_the_endpoint(client: AsyncClient):
 async def test_an_absurd_offset_is_rejected(client: AsyncClient):
     headers = await _auth(client, "fest-badtz@example.com")
     assert (await client.get(FESTIVALS, headers=headers, params={"utc_offset_minutes": 9999})).status_code == 422
+
+
+# --- Tamil Nadu --------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,year,expected",
+    [
+        # thirukanitham.com (Drik method) cross-checked with prokerala.
+        ("Pongal", 2026, date(2026, 1, 15)),
+        ("Pongal", 2027, date(2027, 1, 15)),
+        ("Pongal", 2028, date(2028, 1, 15)),   # NOT 14 Jan — that is Sri Lanka's convention
+        ("Puthandu", 2026, date(2026, 4, 14)),
+        ("Puthandu", 2027, date(2027, 4, 14)),
+        ("Karthigai Deepam", 2026, date(2026, 11, 24)),
+        ("Karthigai Deepam", 2027, date(2027, 12, 12)),   # moves by a fortnight year to year
+        ("Aadi Perukku", 2026, date(2026, 8, 3)),
+    ],
+)
+def test_the_tamil_dates_match_the_sources(name, year, expected):
+    match = [f for f in fc.FESTIVALS if f.name == name and f.day.year == year]
+    assert len(match) == 1
+    assert match[0].day == expected
+    assert match[0].region == fc.REGION_TAMIL_NADU
+
+
+def test_pongal_is_not_an_alias_for_makar_sankranti():
+    """Same solar event, different day when the sankranti moment lands after
+    sunset — the Tamil month Thai starts the next morning. Aliasing them would
+    be a day wrong every few years, which for a four-day festival is the
+    difference between warning someone before the shopping and after it."""
+    pongal_2026 = next(f for f in fc.FESTIVALS if f.name == "Pongal" and f.day.year == 2026)
+    sankranti_2026 = next(f for f in fc.FESTIVALS if f.name == "Makar Sankranti" and f.day.year == 2026)
+    assert pongal_2026.day == date(2026, 1, 15)
+    assert sankranti_2026.day == date(2026, 1, 14)
+    assert pongal_2026.day != sankranti_2026.day
+
+
+def test_pongals_window_opens_before_the_shopping_not_after():
+    # Four days of festival, but the new clothes and the trip home are bought
+    # well before Bhogi.
+    pongal = next(f for f in fc.FESTIVALS if f.name == "Pongal" and f.day.year == 2027)
+    start, end = fc.window(pongal)
+    assert start == date(2027, 1, 4)
+    assert end == date(2027, 1, 17), "through Mattu and Kaanum Pongal"
+
+
+def test_tamil_nadu_is_additive_to_india_not_a_replacement():
+    # A Tamil user still keeps Deepavali; they gain Pongal on top.
+    tn_names = {f.name for f in fc.FESTIVALS if f.region == fc.REGION_TAMIL_NADU}
+    assert "Pongal" in tn_names
+    assert "Diwali" not in tn_names, "Diwali comes from the India rows, not duplicated here"
+
+
+def test_tamil_nadu_can_only_come_from_the_setting():
+    # A phone in Chennai and a phone in Delhi are both +05:30 and both INR.
+    # No sensor can tell them apart — only asking can.
+    assert fc.region_for_utc_offset(330) == fc.REGION_INDIA
+    assert fc.region_for_currency("INR") == fc.REGION_INDIA
+    assert fc.REGION_TAMIL_NADU in fc.KNOWN_REGIONS
+
+
+async def test_a_tamil_user_gets_pongal_and_diwali_merged(client: AsyncClient):
+    headers = await _auth(client, "fest-tn@example.com")
+    resp = await client.patch("/api/v1/users/me/settings", headers=headers,
+                              json={"notification_preferences": {"festival_regions": ["IN", "IN-TN"]}})
+    assert resp.status_code == 200, resp.text
+
+    body = (await client.get(FESTIVALS, headers=headers, params={"limit": 10})).json()
+    assert body["ready"] is True
+    assert sorted(body["regions"]) == ["IN", "IN-TN"]
+    dates = [f["date"] for f in body["upcoming"]]
+    assert dates == sorted(dates), "merged in date order"
+    names = [f["name"] for f in body["upcoming"]]
+    assert "Karthigai Deepam" in names, "the Tamil calendar must actually show up"
+    assert "Diwali" in names, "...without losing the pan-India ones"
