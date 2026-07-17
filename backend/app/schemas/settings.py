@@ -33,6 +33,12 @@ class NotificationPreferences(BaseModel):
     # screen opens the "what are you planning?" chooser instead of re-asking.
     profile_setup_done: bool = False
 
+    # Whose festivals to track. Empty = fall back to the device's timezone, then
+    # the base currency. A list, not a single value: an Indian student in Tokyo
+    # wants Diwali AND Golden Week, which is a question about who you are, not
+    # where you are.
+    festival_regions: list[str] = []
+
 
 class UserSettingsRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

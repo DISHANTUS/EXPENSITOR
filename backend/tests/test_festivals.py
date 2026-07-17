@@ -154,7 +154,7 @@ async def test_the_endpoint_returns_the_next_festivals(client: AsyncClient):
     # Regression: `region` was set by the service and silently dropped by the
     # response model, because the schema didn't declare it and no test asserted
     # it. That is the third time this exact bug class has bitten this project.
-    assert body["region"] == fc.REGION_INDIA
+    assert body["regions"] == [fc.REGION_INDIA]
 
     first = body["upcoming"][0]
     for field in ("name", "date", "days_away", "approximate", "line"):
@@ -331,7 +331,98 @@ async def test_a_yen_user_gets_japanese_festivals_over_http(client: AsyncClient)
 
     body = (await client.get(FESTIVALS, headers=headers)).json()
     assert body["ready"] is True
-    assert body["region"] == fc.REGION_JAPAN
+    assert body["regions"] == [fc.REGION_JAPAN]
     names = [f["name"] for f in body["upcoming"]]
     assert names, "a yen user in 2026 should see the Japanese calendar"
     assert not any(n in ("Diwali", "Holi") for n in names)
+
+
+# --- whose festivals are these? (setting > timezone > currency) ---------------
+
+
+def test_the_timezone_offset_names_a_region():
+    # The "you've moved" signal, for free. Land in Tokyo and the phone's clock
+    # says +09:00 by itself — no permission, no prompt, no battery, still works
+    # offline. GPS buys nothing extra for the only question we're asking.
+    assert fc.region_for_utc_offset(330) == fc.REGION_INDIA    # +05:30
+    assert fc.region_for_utc_offset(540) == fc.REGION_JAPAN    # +09:00
+    # Somewhere we have no calendar for -> nothing, rather than a wrong guess.
+    assert fc.region_for_utc_offset(60) is None                # +01:00, Ireland
+    assert fc.region_for_utc_offset(-300) is None              # US eastern
+    assert fc.region_for_utc_offset(None) is None
+
+
+async def test_what_the_user_chose_beats_where_the_phone_is(client: AsyncClient, db_session):
+    """The heart of it. An Indian student in Tokyo wants Diwali AND Golden Week.
+    That is a question about who you are, not where you are — no amount of GPS
+    accuracy could answer it, and a location-driven app would silently take
+    Diwali away the moment they landed."""
+    import uuid as _uuid
+    headers = await _auth(client, "fest-both@example.com")
+    user_id = _uuid.UUID((await client.get("/api/v1/users/me", headers=headers)).json()["id"])
+
+    resp = await client.patch("/api/v1/users/me/settings", headers=headers,
+                              json={"notification_preferences": {"festival_regions": ["IN", "JP"]}})
+    assert resp.status_code == 200, resp.text
+
+    # Phone says Tokyo (+09:00) — the setting still wins, and keeps both.
+    regions = await svc.resolve_regions(db_session, user_id, currency="JPY", utc_offset_minutes=540)
+    assert regions == ["IN", "JP"]
+
+
+async def test_with_no_setting_the_phones_clock_decides(client: AsyncClient, db_session):
+    import uuid as _uuid
+    headers = await _auth(client, "fest-tz@example.com")
+    user_id = _uuid.UUID((await client.get("/api/v1/users/me", headers=headers)).json()["id"])
+
+    # Still an INR user, but the phone is in Tokyo: the clock beats the currency.
+    assert await svc.resolve_regions(db_session, user_id, currency="INR", utc_offset_minutes=540) == ["JP"]
+    # Back home.
+    assert await svc.resolve_regions(db_session, user_id, currency="INR", utc_offset_minutes=330) == ["IN"]
+
+
+async def test_with_no_setting_and_no_clock_the_currency_decides(client: AsyncClient, db_session):
+    import uuid as _uuid
+    headers = await _auth(client, "fest-cur@example.com")
+    user_id = _uuid.UUID((await client.get("/api/v1/users/me", headers=headers)).json()["id"])
+    assert await svc.resolve_regions(db_session, user_id, currency="INR") == ["IN"]
+    assert await svc.resolve_regions(db_session, user_id, currency="USD") == []
+
+
+async def test_an_unknown_region_in_the_setting_is_ignored_not_trusted(client: AsyncClient, db_session):
+    # A setting naming a region we have no dates for is a promise we can't keep.
+    import uuid as _uuid
+    headers = await _auth(client, "fest-bogus@example.com")
+    user_id = _uuid.UUID((await client.get("/api/v1/users/me", headers=headers)).json()["id"])
+    await client.patch("/api/v1/users/me/settings", headers=headers,
+                       json={"notification_preferences": {"festival_regions": ["IE", "XX"]}})
+    # Falls through to the currency rather than pretending Ireland works.
+    assert await svc.resolve_regions(db_session, user_id, currency="INR") == ["IN"]
+
+
+async def test_two_regions_are_merged_by_date_not_stacked(client: AsyncClient):
+    """With both calendars on, the next thing coming up is whichever lands
+    first — not all of India and then all of Japan."""
+    headers = await _auth(client, "fest-merge@example.com")
+    await client.patch("/api/v1/users/me/settings", headers=headers,
+                       json={"notification_preferences": {"festival_regions": ["IN", "JP"]}})
+
+    body = (await client.get(FESTIVALS, headers=headers, params={"limit": 5})).json()
+    assert body["ready"] is True
+    assert sorted(body["regions"]) == ["IN", "JP"]
+    dates = [f["date"] for f in body["upcoming"]]
+    assert dates == sorted(dates), "merged festivals must be in date order"
+    names = [f["name"] for f in body["upcoming"]]
+    assert any(n in ("Obon", "Silver Week", "Shogatsu", "Golden Week") for n in names)
+    assert any(n in ("Raksha Bandhan", "Janmashtami", "Ganesh Chaturthi", "Diwali") for n in names)
+
+
+async def test_the_timezone_hint_reaches_the_endpoint(client: AsyncClient):
+    headers = await _auth(client, "fest-tzhttp@example.com")   # an INR user...
+    body = (await client.get(FESTIVALS, headers=headers, params={"utc_offset_minutes": 540})).json()
+    assert body["regions"] == ["JP"], "the phone being in Tokyo should switch the calendar"
+
+
+async def test_an_absurd_offset_is_rejected(client: AsyncClient):
+    headers = await _auth(client, "fest-badtz@example.com")
+    assert (await client.get(FESTIVALS, headers=headers, params={"utc_offset_minutes": 9999})).status_code == 422

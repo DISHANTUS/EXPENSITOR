@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.intelligence.companion import festival_calendar as fc
 from app.models.expense import Expense
 from app.models.user import User
-from app.services import budget_service, calendar_service
+from app.services import budget_service, calendar_service, settings_service
 
 # A festival window is compared against the ordinary days around it. This is the
 # stretch either side used to work out what "ordinary" costs for this person.
@@ -153,32 +153,67 @@ def _line(festival: fc.Festival, days_away: int, measured: dict[str, Any] | None
     return base  # no history: the date, and not one invented rupee
 
 
+async def resolve_regions(
+    db: AsyncSession, user_id: uuid.UUID, *, currency: str, utc_offset_minutes: int | None = None
+) -> list[str]:
+    """Whose festivals this user should see, in priority order.
+
+    1. What they chose. Always wins, and it can be more than one — an Indian
+       student in Tokyo wants Diwali AND Golden Week. That's not a location
+       question, and no amount of GPS accuracy could answer it. Only asking can.
+    2. The phone's UTC offset. The "you've moved" signal, for free: land in
+       Tokyo and the clock says +09:00 on its own. A hint, never an override.
+    3. The currency they think in. The backstop.
+
+    Empty means we have no calendar for them, which is the honest answer rather
+    than showing someone else's festivals.
+    """
+    prefs = await settings_service.get_settings(db, user_id)
+    chosen = [r for r in (prefs.notification_preferences or {}).get("festival_regions", []) if r in fc.KNOWN_REGIONS]
+    if chosen:
+        return chosen
+
+    hinted = fc.region_for_utc_offset(utc_offset_minutes)
+    if hinted:
+        return [hinted]
+
+    from_currency = fc.region_for_currency(currency)
+    return [from_currency] if from_currency else []
+
+
 async def insights(
-    db: AsyncSession, user_id: uuid.UUID, *, today: date | None = None, limit: int = 3
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    today: date | None = None,
+    limit: int = 3,
+    utc_offset_minutes: int | None = None,
 ) -> dict[str, Any]:
     today = today or await calendar_service.user_today(db, user_id)
 
-    # Which festivals are even this user's. Derived from the currency they think
-    # in — a proxy, but one that needs no migration and no location permission.
-    # An unmapped currency gets no festivals at all, which is the honest answer:
-    # showing a Brazilian user Diwali would be worse than showing them nothing.
     settings = await budget_service.summary(db, user_id)
-    region = fc.region_for_currency(settings.base_currency)
-    if region is None:
+    regions = await resolve_regions(
+        db, user_id, currency=settings.base_currency, utc_offset_minutes=utc_offset_minutes
+    )
+    if not regions:
         return {
             "ready": False,
             "reason": "no_festival_calendar_for_region",
+            "regions": [],
             "calendar_until": fc.LAST_COVERED_DATE.isoformat(),
             "upcoming": [],
         }
 
-    if not fc.covers(today, region=region):
-        # The baked calendar has run out. Say so plainly — a festival feature
-        # that starts guessing dates is worse than one that admits it's stale.
+    live = [r for r in regions if fc.covers(today, region=r)]
+    if not live:
+        # Every calendar they'd use has run out. Say so plainly — a festival
+        # feature that starts guessing dates is worse than one that admits it's
+        # stale.
         return {
             "ready": False,
             "reason": "festival_calendar_out_of_date",
-            "calendar_until": fc.coverage(region)[1].isoformat(),
+            "regions": regions,
+            "calendar_until": max(fc.coverage(r)[1] for r in regions).isoformat(),
             "upcoming": [],
         }
 
@@ -186,8 +221,15 @@ async def insights(
     currency = budget.base_currency
     history_start = await _history_start(db, user_id, today)
 
+    # Merged and re-sorted: with two regions the next thing coming up is
+    # whichever lands first, not "all of India, then all of Japan".
+    merged = sorted(
+        (f for r in live for f in fc.upcoming(today, region=r)),
+        key=lambda f: f.day,
+    )
+
     out: list[dict[str, Any]] = []
-    for festival in fc.upcoming(today, region=region)[:limit]:
+    for festival in merged[:limit]:
         previous = fc.previous_occurrence(festival.name, festival.day)
         measured = (
             await _measure(db, user_id, previous, history_start=history_start) if previous else None
@@ -205,7 +247,7 @@ async def insights(
     return {
         "ready": True,
         "currency": currency,
-        "region": region,
-        "calendar_until": fc.coverage(region)[1].isoformat(),
+        "regions": live,
+        "calendar_until": min(fc.coverage(r)[1] for r in live).isoformat(),
         "upcoming": out,
     }

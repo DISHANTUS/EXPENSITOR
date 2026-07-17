@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
 import 'enrichment_queue_tile.dart';
+import 'festival_regions_tile.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/budget/budget_plan_repository.dart';
 import '../../core/companion/mood_repository.dart';
@@ -556,6 +557,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _VoiceToggles(prefs: settings.valueOrNull?.notificationPreferences ?? const {}),
           // Developer-only tools — hidden for normal users (the API also 403s them).
+          const FestivalRegionsTile(),
           if (isDev) ...[
             const SizedBox(height: 8),
             const Padding(

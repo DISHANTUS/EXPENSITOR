@@ -69,7 +69,7 @@ Dio _dioWith(List<Object> script) => Dio()..httpClientAdapter = _ScriptedAdapter
 
 Map<String, dynamic> _payload(String name) => {
       'ready': true,
-      'region': 'IN',
+      'regions': ['IN'],
       'currency': 'INR',
       'calendar_until': '2028-12-25',
       'upcoming': [
@@ -93,7 +93,7 @@ void main() {
 
     final live = await repo.upcoming();
     expect(live.upcoming.single.name, 'Diwali');
-    expect(live.region, 'IN');
+    expect(live.regions, ['IN']);
     expect(cache.isOffline.value, isFalse);
   });
 

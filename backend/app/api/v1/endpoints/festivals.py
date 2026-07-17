@@ -16,5 +16,15 @@ async def upcoming_festivals(
     db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(default=3, ge=1, le=10),
+    utc_offset_minutes: int | None = Query(default=None, ge=-840, le=840),
 ) -> FestivalsOut:
-    return FestivalsOut(**await festival_service.insights(db, current_user.id, limit=limit))
+    # The device's UTC offset, sent by the client — the "you've moved country"
+    # signal, for free. Deliberately not GPS: this costs no permission, no
+    # battery and no Play Store declaration, works offline, and answers the only
+    # question we actually have (which calendar?) just as well. An explicit
+    # setting always beats it.
+    return FestivalsOut(
+        **await festival_service.insights(
+            db, current_user.id, limit=limit, utc_offset_minutes=utc_offset_minutes
+        )
+    )

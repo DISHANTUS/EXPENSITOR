@@ -47,12 +47,12 @@ class UpcomingFestival {
 }
 
 class Festivals {
-  const Festivals({required this.ready, this.currency = 'INR', this.region, this.upcoming = const []});
+  const Festivals({required this.ready, this.currency = 'INR', this.regions = const [], this.upcoming = const []});
 
   factory Festivals.fromJson(Map<String, dynamic> j) => Festivals(
         ready: j['ready'] == true,
         currency: (j['currency'] ?? 'INR').toString(),
-        region: j['region'] as String?,
+        regions: [for (final r in (j['regions'] as List? ?? const [])) r.toString()],
         upcoming: [
           for (final f in (j['upcoming'] as List? ?? const []))
             UpcomingFestival.fromJson(Map<String, dynamic>.from(f as Map)),
@@ -64,10 +64,10 @@ class Festivals {
   final bool ready;
   final String currency;
 
-  /// Which calendar this user is being shown (IN | JP). Null when no calendar
-  /// covers their currency — in which case `ready` is false and there is
-  /// nothing to show.
-  final String? region;
+  /// Which calendars this user is being shown (IN, JP, or both). Empty when
+  /// none covers them — in which case `ready` is false and there's nothing to
+  /// show, which beats showing someone else's festivals.
+  final List<String> regions;
 
   final List<UpcomingFestival> upcoming;
 }
@@ -84,8 +84,17 @@ class FestivalRepository {
   /// so yesterday's copy is exactly as true as today's. The measured "last time
   /// this cost you X" can go stale by a day's spending, which is a rounding
   /// error against a number describing a fortnight last year.
-  Future<Festivals> upcoming() async =>
-      Festivals.fromJson(await _cache.fetchJson(_dio, '/festivals', query: {'limit': 3}));
+  Future<Festivals> upcoming() async => Festivals.fromJson(
+        await _cache.fetchJson(_dio, '/festivals', query: {
+          'limit': 3,
+          // The phone's UTC offset — the "you've moved country" signal, free.
+          // Land in Tokyo and this becomes 540 on its own: no permission, no
+          // prompt, no battery, and it still works offline. GPS would cost all
+          // of those to answer the same single question. An explicit setting
+          // overrides it server-side anyway.
+          'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
+        }),
+      );
 }
 
 final festivalRepositoryProvider = Provider<FestivalRepository>(

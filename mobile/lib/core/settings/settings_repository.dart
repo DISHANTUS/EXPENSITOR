@@ -129,6 +129,15 @@ class SettingsRepository {
   /// Flag the basic-info interview as done. Merges into the existing prefs so
   /// no other preference (voice toggles, free-time) is lost — the backend
   /// replaces the whole JSONB dict on PATCH, so we send the merged set.
+  /// Whose festivals to track. Empty = let the app work it out from the phone's
+  /// timezone, then the base currency.
+  Future<UserSettings> setFestivalRegions(List<String> regions) async {
+    final current = await get();
+    final merged = Map<String, dynamic>.from(current.notificationPreferences)
+      ..['festival_regions'] = regions;
+    return setNotificationPreferences(merged);   // backend REPLACES the dict, so send merged
+  }
+
   Future<UserSettings> markProfileSetupComplete() async {
     final current = await get();
     final merged = Map<String, dynamic>.from(current.notificationPreferences)

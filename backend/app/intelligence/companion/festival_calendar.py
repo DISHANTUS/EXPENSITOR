@@ -52,6 +52,11 @@ from datetime import date, timedelta
 REGION_INDIA = "IN"
 REGION_JAPAN = "JP"
 
+# Every region with a calendar on file. Anything outside this is rejected rather
+# than stored: a setting naming a region we have no dates for is a promise we
+# cannot keep.
+KNOWN_REGIONS = (REGION_INDIA, REGION_JAPAN)
+
 # Which region's festivals a user sees, derived from the currency they think in.
 # A proxy, and an honest one: it needs no migration, no new question at signup,
 # and no location permission — and someone budgeting in yen is overwhelmingly
@@ -65,6 +70,32 @@ _CURRENCY_REGION: dict[str, str] = {
 
 def region_for_currency(currency: str | None) -> str | None:
     return _CURRENCY_REGION.get((currency or "").upper())
+
+
+# The phone's UTC offset in minutes -> region. This is the "you've moved" signal,
+# and it is deliberately NOT GPS.
+#
+# GPS costs the heaviest permission in the app, a prompt, battery, a Play Store
+# location declaration, and it stops working offline — all to learn one fact that
+# changes maybe once a decade. The phone's clock already knows: land in Tokyo and
+# the offset becomes +9:00 by itself.
+#
+# It is only ever a HINT. An explicit setting always wins, because where someone
+# IS and whose festivals are THEIRS are different questions — an Indian student in
+# Tokyo wants Diwali and Golden Week, and no amount of location accuracy can work
+# that out. Only asking can, once.
+_UTC_OFFSET_REGION: dict[int, str] = {
+    330: REGION_INDIA,   # +05:30 — India (shared only with Sri Lanka)
+    540: REGION_JAPAN,   # +09:00 — Japan (shared with Korea; we only have JP on file)
+}
+
+
+def region_for_utc_offset(offset_minutes: int | None) -> str | None:
+    """A guess at the region from the device's clock. None when the offset maps
+    to somewhere we have no calendar for — an empty answer beats a wrong one."""
+    if offset_minutes is None:
+        return None
+    return _UTC_OFFSET_REGION.get(offset_minutes)
 
 
 @dataclass(frozen=True)
