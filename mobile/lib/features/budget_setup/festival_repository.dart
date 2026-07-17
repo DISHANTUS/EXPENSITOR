@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
-import '../../core/api/api_exception.dart';
+import '../../core/cache/offline_cache.dart';
 
 /// A festival coming up, and what it cost this user last time.
 ///
@@ -47,11 +47,12 @@ class UpcomingFestival {
 }
 
 class Festivals {
-  const Festivals({required this.ready, this.currency = 'INR', this.upcoming = const []});
+  const Festivals({required this.ready, this.currency = 'INR', this.region, this.upcoming = const []});
 
   factory Festivals.fromJson(Map<String, dynamic> j) => Festivals(
         ready: j['ready'] == true,
         currency: (j['currency'] ?? 'INR').toString(),
+        region: j['region'] as String?,
         upcoming: [
           for (final f in (j['upcoming'] as List? ?? const []))
             UpcomingFestival.fromJson(Map<String, dynamic>.from(f as Map)),
@@ -62,25 +63,33 @@ class Festivals {
   /// says nothing rather than guessing a lunar date.
   final bool ready;
   final String currency;
+
+  /// Which calendar this user is being shown (IN | JP). Null when no calendar
+  /// covers their currency — in which case `ready` is false and there is
+  /// nothing to show.
+  final String? region;
+
   final List<UpcomingFestival> upcoming;
 }
 
 class FestivalRepository {
-  FestivalRepository(this._dio);
+  FestivalRepository(this._dio, this._cache);
   final Dio _dio;
+  final OfflineCache _cache;
 
-  Future<Festivals> upcoming() async {
-    try {
-      final res = await _dio.get<dynamic>('/festivals', queryParameters: {'limit': 3});
-      return Festivals.fromJson(Map<String, dynamic>.from(res.data as Map));
-    } on DioException catch (e) {
-      throw mapDioError(e);
-    }
-  }
+  /// Goes through the offline cache, so the last answer stays on the phone and
+  /// still shows with no internet.
+  ///
+  /// Festivals are the ideal thing to cache: the dates are fixed months ahead,
+  /// so yesterday's copy is exactly as true as today's. The measured "last time
+  /// this cost you X" can go stale by a day's spending, which is a rounding
+  /// error against a number describing a fortnight last year.
+  Future<Festivals> upcoming() async =>
+      Festivals.fromJson(await _cache.fetchJson(_dio, '/festivals', query: {'limit': 3}));
 }
 
-final festivalRepositoryProvider =
-    Provider<FestivalRepository>((ref) => FestivalRepository(ref.watch(dioProvider)));
+final festivalRepositoryProvider = Provider<FestivalRepository>(
+    (ref) => FestivalRepository(ref.watch(dioProvider), ref.watch(offlineCacheProvider)));
 
 final festivalsProvider =
     FutureProvider.autoDispose<Festivals>((ref) => ref.watch(festivalRepositoryProvider).upcoming());
