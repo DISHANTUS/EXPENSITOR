@@ -12,6 +12,7 @@ import '../../core/theme/glass.dart';
 import '../advisor/advisor_chat_repository.dart';
 import '../advisor/widgets/follow_up_card.dart';
 import '../home/daily_report_repository.dart';
+import 'festival_card.dart';
 import 'budget_repository.dart';
 import 'planning_intelligence.dart';
 import 'planning_repository.dart';
@@ -76,6 +77,14 @@ class _PlanningHubState extends ConsumerState<PlanningHub> {
         _seed = null;
       });
 
+  /// "Plan for Diwali" -> the savings flow, already knowing what it's for.
+  /// Only the name is carried: the amount is theirs to decide, and guessing
+  /// what a festival "should" cost is exactly what this app doesn't do.
+  void _planForFestival(String name) => setState(() {
+        _intent = _Intent.save;
+        _seed = PlanningIntent(kind: 'save', item: name);
+      });
+
   Future<void> _readFreeText() async {
     final text = _free.text.trim();
     if (text.isEmpty || _reading) return;
@@ -115,6 +124,9 @@ class _PlanningHubState extends ConsumerState<PlanningHub> {
         // Advary's own questions come first — the orb's "!" promises they're
         // here, so they must actually be here.
         const _PendingQuestions(),
+        // Then what's coming: a festival you can still save for is planning,
+        // not trivia.
+        FestivalCard(onPlan: _planForFestival),
         Text('What are you planning?', style: TextStyle(color: p.on, fontSize: 17, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Text(
