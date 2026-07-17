@@ -44,6 +44,7 @@ from app.api.v1.endpoints import (
     savings_goals,
     system,
     timeline,
+    transactions,
     users,
     voice,
 )
@@ -59,6 +60,7 @@ api_router.include_router(calendar.router)
 api_router.include_router(daily_plans.router)
 api_router.include_router(daily_report.router)
 api_router.include_router(diary.router)
+api_router.include_router(transactions.router)
 api_router.include_router(festivals.router)
 api_router.include_router(budget.router)
 api_router.include_router(persons.router)
