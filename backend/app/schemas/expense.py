@@ -69,3 +69,12 @@ class PredictedExpense(BaseModel):
     occurrences: int
     day_type: str        # weekday | weekend
     confidence: str      # medium | high
+
+
+class ReasonSuggestion(BaseModel):
+    """A reason the user has given before, offered as a one-tap chip. `reason`
+    is their own past wording, never generated."""
+
+    reason: str
+    uses: int
+    last_used: str | None = None

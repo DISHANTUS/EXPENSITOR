@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.common import Page
-from app.schemas.expense import ExpenseCreate, ExpenseRead, ExpenseUpdate, PredictedExpense
-from app.services import daily_habit_service, expense_service, settings_service
+from app.schemas.expense import ExpenseCreate, ExpenseRead, ExpenseUpdate, PredictedExpense, ReasonSuggestion
+from app.services import daily_habit_service, expense_service, reason_suggestion_service, settings_service
 from app.services.exceptions import (
     CurrencyNotFoundError,
     FieldNotNullableError,
@@ -82,6 +83,25 @@ async def predicted_today(current_user: CurrentUser, db: DbSession) -> list[Pred
     today = datetime.now(ZoneInfo(settings.timezone or "UTC")).date()
     rows = await daily_habit_service.predict_today(db, current_user.id, today=today)
     return [PredictedExpense.model_validate(r) for r in rows]
+
+
+@router.get("/reason-suggestions", response_model=list[ReasonSuggestion],
+            summary="Reasons you've given before, ranked for this spend")
+async def reason_suggestions(
+    current_user: CurrentUser,
+    db: DbSession,
+    amount: Decimal | None = Query(default=None, ge=0),
+    on_date: date | None = Query(default=None, alias="date"),
+    category_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=5, ge=1, le=10),
+) -> list[ReasonSuggestion]:
+    # Every suggestion is one of the user's own past descriptions, re-ordered
+    # for this spend — nothing invented. Defined before /{expense_id} so
+    # "reason-suggestions" isn't parsed as an expense id.
+    rows = await reason_suggestion_service.suggest(
+        db, current_user.id, amount=amount, on_date=on_date, category_id=category_id, limit=limit
+    )
+    return [ReasonSuggestion(**r) for r in rows]
 
 
 @router.get("/{expense_id}", response_model=ExpenseRead)

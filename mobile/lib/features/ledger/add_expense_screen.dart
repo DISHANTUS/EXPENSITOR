@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,11 +28,48 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late DateTime _date = widget.date;
   bool _busy = false;
 
+  /// Reasons the user has given before, ranked for the amount they're typing.
+  /// Tapping one fills the notes field — the whole point is that recording a
+  /// repeat spend is a tap, not a re-type. A reason typed for the first time
+  /// today is in this list tomorrow, because it's just their own past wording.
+  List<String> _suggestions = const [];
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    // Amount is the strongest cue, so re-rank as they type — but debounced, not
+    // one request per keystroke.
+    _amount.addListener(_scheduleSuggest);
+    _loadSuggestions(); // an amount-agnostic first pass on open
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _amount.dispose();
     _notes.dispose();
     super.dispose();
+  }
+
+  void _scheduleSuggest() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _loadSuggestions);
+  }
+
+  Future<void> _loadSuggestions() async {
+    try {
+      final rows = await ref.read(ledgerRepositoryProvider).reasonSuggestions(
+            amount: _amount.text.trim(),
+            date: _date,
+            categoryId: _categoryId,
+          );
+      if (mounted) setState(() => _suggestions = rows);
+    } catch (_) {
+      // Suggestions are a convenience, never a gate: on any failure the plain
+      // notes box is still right there. Never surfaced as an error.
+      if (mounted) setState(() => _suggestions = const []);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -106,7 +145,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const DropdownMenuItem<String?>(value: null, child: Text('Uncategorized')),
                     ...list.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name))),
                   ],
-                  onChanged: (v) => setState(() => _categoryId = v),
+                  onChanged: (v) {
+                    setState(() => _categoryId = v);
+                    _loadSuggestions(); // category sharpens the ranking
+                  },
                 ),
                 loading: () => const InputDecorator(
                   decoration: InputDecoration(labelText: 'Category'),
@@ -118,6 +160,30 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (_suggestions.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('What was this for?',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final reason in _suggestions)
+                      ActionChip(
+                        label: Text(reason),
+                        // One tap fills the box. They can still edit it after.
+                        onPressed: () => setState(() {
+                          _notes.text = reason;
+                          _notes.selection = TextSelection.collapsed(offset: reason.length);
+                        }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               TextFormField(
                 controller: _notes,
                 maxLength: 500,

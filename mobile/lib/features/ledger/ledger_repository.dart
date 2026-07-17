@@ -102,6 +102,23 @@ class LedgerRepository {
       throw mapDioError(e);
     }
   }
+  /// Reasons the user has given before, ranked for this spend. Every string is
+  /// one of their own past descriptions — nothing generated. Empty on a fresh
+  /// account, in which case the UI shows nothing.
+  Future<List<String>> reasonSuggestions({String? amount, DateTime? date, String? categoryId}) async {
+    try {
+      final res = await _dio.get<dynamic>('/expenses/reason-suggestions', queryParameters: {
+        if (amount != null && amount.isNotEmpty) 'amount': amount,
+        if (date != null) 'date': '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+        if (categoryId != null) 'category_id': categoryId,
+        'limit': 5,
+      });
+      return [for (final r in (res.data as List)) (r as Map)['reason'].toString()];
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
 }
 
 final ledgerRepositoryProvider =
