@@ -151,6 +151,11 @@ async def test_the_endpoint_returns_the_next_festivals(client: AsyncClient):
     assert body["ready"] is True
     assert body["calendar_until"] == fc.coverage(fc.REGION_INDIA)[1].isoformat()
     assert len(body["upcoming"]) >= 1
+    # Regression: `region` was set by the service and silently dropped by the
+    # response model, because the schema didn't declare it and no test asserted
+    # it. That is the third time this exact bug class has bitten this project.
+    assert body["region"] == fc.REGION_INDIA
+
     first = body["upcoming"][0]
     for field in ("name", "date", "days_away", "approximate", "line"):
         assert field in first, f"{field} was dropped by the response model"
@@ -326,6 +331,7 @@ async def test_a_yen_user_gets_japanese_festivals_over_http(client: AsyncClient)
 
     body = (await client.get(FESTIVALS, headers=headers)).json()
     assert body["ready"] is True
+    assert body["region"] == fc.REGION_JAPAN
     names = [f["name"] for f in body["upcoming"]]
     assert names, "a yen user in 2026 should see the Japanese calendar"
     assert not any(n in ("Diwali", "Holi") for n in names)

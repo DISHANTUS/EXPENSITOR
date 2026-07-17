@@ -22,6 +22,7 @@ class FestivalsOut(BaseModel):
 
     ready: bool
     reason: str | None = None
+    region: str | None = None     # IN | JP — which calendar this user is being shown
     currency: str | None = None
     calendar_until: str
     upcoming: list[FestivalUpcoming] = []
