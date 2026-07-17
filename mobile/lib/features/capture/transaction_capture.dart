@@ -45,9 +45,60 @@ class TxnCandidate {
   bool get isExpense => kind == 'expense';
 }
 
+/// One line off a scanned receipt: what it cost on this bill, and what the user
+/// usually pays (when they've bought it before).
+class ReceiptLine {
+  const ReceiptLine({required this.name, required this.price, this.typicalPrice, this.observations});
+  factory ReceiptLine.fromJson(Map<String, dynamic> j) => ReceiptLine(
+        name: (j['name'] ?? '').toString(),
+        price: (j['price'] ?? '').toString(),
+        typicalPrice: j['typical_price'] as String?,
+        observations: (j['observations'] as num?)?.toInt(),
+      );
+  final String name;
+  final String price;
+  final String? typicalPrice; // "you usually pay ₹58", null when no history
+  final int? observations;
+
+  Map<String, String> toRecordJson() => {'name': name, 'price': price};
+}
+
+/// A scanned receipt, awaiting confirmation. `total` becomes the expense;
+/// `items` become this user's price history once confirmed.
+class ReceiptCandidate {
+  const ReceiptCandidate({this.merchant, this.total, this.date, this.items = const [], this.reasons = const []});
+  factory ReceiptCandidate.fromJson(Map<String, dynamic> j) => ReceiptCandidate(
+        merchant: j['merchant'] as String?,
+        total: j['total'] as String?,
+        date: j['date'] as String?,
+        items: [
+          for (final i in (j['items'] as List? ?? const []))
+            ReceiptLine.fromJson(Map<String, dynamic>.from(i as Map)),
+        ],
+        reasons: [for (final r in (j['reasons'] as List? ?? const [])) r.toString()],
+      );
+  final String? merchant;
+  final String? total;
+  final String? date;
+  final List<ReceiptLine> items;
+  final List<String> reasons;
+}
+
 class TransactionCaptureRepository {
   TransactionCaptureRepository(this._dio);
   final Dio _dio;
+
+  /// Read a receipt's OCR text into a candidate, or null when it isn't a
+  /// receipt we can act on.
+  Future<ReceiptCandidate?> parseReceipt(String text) async {
+    try {
+      final res = await _dio.post<dynamic>('/transactions/parse-receipt', data: {'text': text});
+      final cand = (res.data as Map)['candidate'];
+      return cand == null ? null : ReceiptCandidate.fromJson(Map<String, dynamic>.from(cand as Map));
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
 
   /// Read a bank SMS into a candidate, or null when it isn't a transaction we
   /// act on — which is the common, correct outcome for most texts.

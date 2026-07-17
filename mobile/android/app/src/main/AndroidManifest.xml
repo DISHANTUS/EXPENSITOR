@@ -3,6 +3,9 @@
          auto-adds INTERNET to debug/profile builds, so release APKs without this
          line cannot reach the backend ("No connection"). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Receipt scanning: the camera is used only when the user taps Scan; OCR
+         runs on-device (ML Kit), so no image ever leaves the phone. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <!-- Voice Conversation Layer (Sprint 5c): mic capture + on-device STT. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Deferred spending-shift check-ins: a local (not push) notification

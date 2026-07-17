@@ -9,6 +9,7 @@ import '../../core/format/dates.dart';
 import '../../core/format/money.dart';
 import '../calendar/calendar_models.dart';
 import '../calendar/calendar_repository.dart';
+import '../capture/scan_receipt_button.dart';
 
 /// Composes a human, deterministic line about a day from its real numbers.
 /// (Richer personalized commentary connects to the advisor engine in Sprint 4.)
@@ -132,6 +133,7 @@ class _AddBar extends StatelessWidget {
             icon: const Icon(Icons.remove),
             label: const Text('Expense'),
           ),
+          const ScanReceiptButton(),
           OutlinedButton.icon(
             onPressed: () => context.go('/date/$iso/add-income'),
             icon: const Icon(Icons.add),
