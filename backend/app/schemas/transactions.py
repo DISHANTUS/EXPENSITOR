@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -36,6 +38,8 @@ class ReceiptParseIn(BaseModel):
 class ReceiptItem(BaseModel):
     name: str
     price: str
+    typical_price: str | None = None    # what the user usually pays, when known
+    observations: int | None = None
 
 
 class ReceiptCandidate(BaseModel):
@@ -60,3 +64,16 @@ class SmsParseOut(BaseModel):
     texts aren't, and saying so is better than inventing one."""
 
     candidate: TxnCandidate | None = None
+
+
+class RecordItemsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ReceiptItem]
+    currency: str = Field(min_length=3, max_length=3)
+    observed_on: date | None = None
+    merchant: str | None = Field(default=None, max_length=200)
+
+
+class RecordItemsOut(BaseModel):
+    stored: int

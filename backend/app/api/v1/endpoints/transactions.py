@@ -17,11 +17,13 @@ from app.schemas.transactions import (
     ReceiptCandidate,
     ReceiptParseIn,
     ReceiptParseOut,
+    RecordItemsIn,
+    RecordItemsOut,
     SmsParseIn,
     SmsParseOut,
     TxnCandidate,
 )
-from app.services import reason_suggestion_service
+from app.services import item_price_service, reason_suggestion_service
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -57,4 +59,20 @@ async def parse_receipt(data: ReceiptParseIn, db: DbSession, current_user: Curre
         )
         reasons = [r["reason"] for r in rows]
 
+    # Attach "you usually pay X" to each line, from the user's own history.
+    parsed["items"] = await item_price_service.annotate(db, current_user.id, parsed.get("items", []))
+
     return ReceiptParseOut(candidate=ReceiptCandidate(**parsed, reasons=reasons))
+
+
+@router.post("/record-items", response_model=RecordItemsOut,
+             summary="Store confirmed receipt items as your price history")
+async def record_items(data: RecordItemsIn, db: DbSession, current_user: CurrentUser) -> RecordItemsOut:
+    # Called when the user confirms a scanned receipt. Only their own prices,
+    # only what they confirmed — nothing is stored from a parse alone.
+    stored = await item_price_service.record(
+        db, current_user.id,
+        items=[i.model_dump() for i in data.items],
+        currency=data.currency, observed_on=data.observed_on, merchant=data.merchant,
+    )
+    return RecordItemsOut(stored=stored)

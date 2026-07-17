@@ -60,6 +60,29 @@ class TransactionCaptureRepository {
       throw mapDioError(e);
     }
   }
+
+  /// Store confirmed receipt items as this user's price history. Called only on
+  /// confirm — a parse alone never records anything.
+  Future<int> recordItems({
+    required List<Map<String, String>> items,
+    required String currency,
+    DateTime? observedOn,
+    String? merchant,
+  }) async {
+    try {
+      final res = await _dio.post<dynamic>('/transactions/record-items', data: {
+        'items': items,
+        'currency': currency,
+        if (observedOn != null)
+          'observed_on': '${observedOn.year.toString().padLeft(4, '0')}-'
+              '${observedOn.month.toString().padLeft(2, '0')}-${observedOn.day.toString().padLeft(2, '0')}',
+        if (merchant != null && merchant.isNotEmpty) 'merchant': merchant,
+      });
+      return (res.data as Map)['stored'] as int? ?? 0;
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
 }
 
 final transactionCaptureRepositoryProvider = Provider<TransactionCaptureRepository>(

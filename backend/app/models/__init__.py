@@ -21,6 +21,7 @@ from app.models.life_event import LifeEvent
 from app.models.life_lesson import LifeLesson
 from app.models.outcome import Outcome
 from app.models.diary_entry import DiaryEntry
+from app.models.item_price import ItemPrice
 from app.models.enrichment_job import EnrichmentJob
 from app.models.system_flag import SystemFlag
 from app.models.payable import Payable
@@ -54,6 +55,7 @@ __all__ = [
     "LifeLesson",
     "Outcome",
     "DiaryEntry",
+    "ItemPrice",
     "EnrichmentJob",
     "SystemFlag",
     "Payable",
