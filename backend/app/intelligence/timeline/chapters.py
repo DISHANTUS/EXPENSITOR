@@ -1,4 +1,4 @@
-"""Life chapters (Sprint 7, pure/deterministic — NOT AI-generated).
+"""Life chapters (Sprint 7, pure/deterministic — computed from the data, no model).
 
 Groups a chronological list of timeline entries into named life chapters using
 deterministic anchors (keywords/kinds), so the user gets something emotional to
