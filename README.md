@@ -155,3 +155,9 @@ cd mobile && flutter test
 - The intelligence layer is **derive-on-read** — no background scheduler; reports
   and patterns are computed from stored facts when requested.
 - Exchange rates come from a free provider (Frankfurter); no API key required.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
