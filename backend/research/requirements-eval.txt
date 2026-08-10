@@ -1,0 +1,13 @@
+# Host-side dependency for turning the harness output into the paper's tables
+# and figures (paper/build_assets.py). The harness itself (make_results, the
+# three eval_* modules) needs nothing beyond the backend's own requirements and
+# runs inside the api container.
+#
+#   pip install -r backend/research/requirements-eval.txt
+#
+matplotlib>=3.7
+
+# Optional: an exact p-value for the user-study paired t-test in
+# paper/user-study/analyze.py. Without it the t-statistic and df are printed for
+# you to look up — the analysis still runs.
+# scipy>=1.10

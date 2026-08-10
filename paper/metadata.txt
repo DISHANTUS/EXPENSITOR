@@ -1,0 +1,70 @@
+SUBMISSION METADATA — paste into EDAS / CMT / EasyChair
+=======================================================
+Plain-text versions of the fields a submission system asks for, so you are not
+re-typing (and re-introducing errors into) the LaTeX. Update the abstract's last
+sentence once you have the real-dataset / user-study headline.
+
+TITLE
+-----
+Expensitor: A Privacy-Preserving, On-Device, Deterministic Personal-Finance
+Companion
+
+ABSTRACT (plain text)
+---------------------
+Modern personal-finance assistants increasingly rely on cloud services, large
+language models (LLMs), and pooled user data to capture and categorise spending.
+This raises three coupled concerns: user privacy (financial data leaving the
+device), recurring cost and latency (per-request cloud/LLM calls), and
+explainability (opaque model decisions over money). We present Expensitor, a
+personal-finance companion built on the opposite set of choices: capture and
+reasoning are deterministic, run on-device or from the user's own data, and
+function offline, with an optional local model used only for conversational
+phrasing and never as a source of numeric fact. The system captures transactions
+from bank SMS alerts and photographed receipts using rule-based extraction with
+on-device OCR, and introduces an amount-aware adaptive reason-suggestion method
+that ranks a user's own past spend reasons so that recording a recurring expense
+is a single tap. We evaluate the components with a reproducible harness. On
+hand-labelled seed sets, transaction detection reaches an F1 of 0.931 with
+perfect precision (zero false positives across ten non-transaction message
+classes), receipt line-item extraction reaches F1 0.971, and the amount-aware
+reason ranking achieves Hit@1 of 0.667, roughly three times a frequency/recency
+baseline. We frame the contribution as a system and evaluation: not a new
+extraction model, but a quantified demonstration that a privacy-preserving,
+explainable, on-device design is a viable point in the design space.
+[ADD ONE SENTENCE with the real-dataset + user-study headline once collected.]
+
+KEYWORDS
+--------
+personal finance; on-device computing; privacy; deterministic systems;
+receipt OCR; SMS parsing; expense tracking; human-computer interaction
+
+SUGGESTED TOPICS / TRACK KEYWORDS (pick what the CFP offers)
+-----------------------------------------------------------
+mobile and ubiquitous computing; applied machine learning / information
+extraction; privacy-enhancing technologies; software systems; HCI / usability;
+FinTech applications
+
+CONTRIBUTIONS (for the "summary of contributions" box, if asked)
+----------------------------------------------------------------
+1. A personal-finance companion whose capture and reasoning are deterministic,
+   on-device or user-data-local, and offline-capable, with an optional local
+   model behind a rules fallback.
+2. An amount-aware adaptive reason-suggestion method that ranks a user's own past
+   reasons for one-tap expense recording.
+3. A reproducible evaluation harness and results quantifying each component
+   against baselines, released with the system.
+
+ORIGINALITY / ETHICS DECLARATIONS (typical checkboxes)
+------------------------------------------------------
+- Original work, not published elsewhere, not under concurrent review.
+- [If the user study is included] conducted with informed consent and ethics
+  approval ref: __________.
+- Competing interests: __________ (state "none" if none).
+- Reproducibility artefacts (harness + datasets) are public at: __________.
+
+AUTHORS (fill)
+--------------
+Name(s):        __________
+Affiliation:    __________
+City, Country:  __________
+Corresponding email: __________

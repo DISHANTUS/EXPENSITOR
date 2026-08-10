@@ -12,6 +12,43 @@ docker compose exec api python -m research.eval_receipts
 docker compose exec api python -m research.eval_reasons
 ```
 
+## Generate the paper's tables and figures (one pipeline, no hand-typing)
+
+Every number, table, and figure in the paper is produced by this code over the
+checked-in data — nothing is transcribed by hand.
+
+```bash
+# 1. compute every metric -> research/generated/results.json  (needs the DB)
+docker compose exec api python -m research.make_results
+
+# 2. turn that JSON into LaTeX tables + figures  (host; needs matplotlib)
+pip install -r backend/research/requirements-eval.txt
+python paper/build_assets.py
+```
+
+`make_results` is deterministic (seed sets + a fixed random seed), so re-running
+it yields a **byte-identical** `results.json` (`git diff` it to zero). Or run
+both steps at once from the repo root: `bash reproduce.sh`.
+
+## Use real datasets (required before submission)
+
+The seed sets are small and clean; convert the standard public benchmarks and
+re-run the same harness. Converters live in `datasets/` and each prints an honest
+note about what it can and cannot measure:
+
+```bash
+python backend/research/datasets/convert_kaggle_sms.py kaggle.csv --inspect
+python backend/research/datasets/convert_sroie.py  path/to/sroie -o receipts_sroie.jsonl
+python backend/research/datasets/convert_cord.py   path/to/cord  -o receipts_cord.jsonl
+```
+
+- **Kaggle Indian-bank-SMS** → SMS detection/fields. Bring your own negatives (or
+  `--with-seed-negatives`) so *precision* stays measurable.
+- **SROIE** → receipt total + merchant only (SROIE has **no** line-item labels).
+- **CORD** → the correct benchmark for the **line-item** F1 claim; note CORD is
+  Indonesian, so it also tests locale generalization (expect lower numbers — an
+  honest result, not a bug). Point the harness `_DATA` at the converted file.
+
 ---
 
 ## Results (seed datasets)

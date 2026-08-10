@@ -113,7 +113,12 @@ def _hit_mrr(ranked: list[str], truth: str):
     return 0, 0, 0.0
 
 
-async def main() -> None:
+async def compute() -> dict:
+    """Run the ranking evaluation and return every reported number as a dict.
+
+    Deterministic (fixed SEED). Seeds a synthetic user, ranks the held-out
+    probes, then removes the user — no residue in the DB. Needs the database, so
+    run it in the backend container."""
     rng = random.Random(SEED)
     events = _build_history(rng)
 
@@ -130,7 +135,8 @@ async def main() -> None:
             ))
         await db.commit()
 
-        methods = {"Expensitor (amount-aware)": [], "most_frequent": [], "most_recent": [], "random": []}
+        order = ["Expensitor (amount-aware)", "most_frequent", "most_recent", "random"]
+        methods: dict[str, list] = {name: [] for name in order}
         for amount, truth in PROBES:
             rows = await svc.suggest(db, user.id, amount=Decimal(amount), on_date=TODAY, limit=50)
             model_ranked = [r["reason"] for r in rows]
@@ -150,15 +156,29 @@ async def main() -> None:
         await db.commit()
 
     n = len(PROBES)
-    distinct = len({r for _, _, r in events})
-    print(f"\nReason-suggestion ranking  —  {n} probes over a {HISTORY_DAYS}-day synthetic history "
-          f"({len(events)} spends, {distinct} distinct reasons)\n")
+    return {
+        "probes": n,
+        "history_days": HISTORY_DAYS,
+        "spends": len(events),
+        "distinct_reasons": len({r for _, _, r in events}),
+        "methods": {
+            name: {
+                "hit1": sum(a for a, _, _ in results) / n,
+                "hit3": sum(b for _, b, _ in results) / n,
+                "mrr": sum(c for _, _, c in results) / n,
+            }
+            for name, results in methods.items()
+        },
+    }
+
+
+async def main() -> None:
+    d = await compute()
+    print(f"\nReason-suggestion ranking  —  {d['probes']} probes over a {d['history_days']}-day "
+          f"synthetic history ({d['spends']} spends, {d['distinct_reasons']} distinct reasons)\n")
     print(f"  {'method':<28}{'Hit@1':>8}{'Hit@3':>8}{'MRR':>8}")
-    for name, results in methods.items():
-        h1 = sum(a for a, _, _ in results) / n
-        h3 = sum(b for _, b, _ in results) / n
-        mrr = sum(c for _, _, c in results) / n
-        print(f"  {name:<28}{h1:>8.3f}{h3:>8.3f}{mrr:>8.3f}")
+    for name, m in d["methods"].items():
+        print(f"  {name:<28}{m['hit1']:>8.3f}{m['hit3']:>8.3f}{m['mrr']:>8.3f}")
     print()
 
 
